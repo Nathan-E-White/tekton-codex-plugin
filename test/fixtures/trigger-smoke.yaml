@@ -43,12 +43,6 @@ spec:
           name: tekton-codex-smoke
 ---
 apiVersion: triggers.tekton.dev/v1beta1
-kind: TriggerBinding
-metadata:
-  name: tekton-codex-smoke
-spec: {}
----
-apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
 metadata:
   name: tekton-codex-smoke
@@ -66,7 +60,5 @@ spec:
                 secretKey: secretToken
             - name: eventTypes
               value: [push]
-      bindings:
-        - ref: tekton-codex-smoke
       template:
         ref: tekton-codex-smoke
