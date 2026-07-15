@@ -44,7 +44,7 @@ type PlanInput struct {
 	Destructive       bool
 	BackupReference   string
 	EvidenceLocation  string
-	DataLossInventory map[string]int64
+	DataLossInventory map[string][]string
 }
 
 type Operation struct {
@@ -60,21 +60,21 @@ type OperationSummary struct {
 }
 
 type Plan struct {
-	ID                string             `json:"id"`
-	Action            string             `json:"action"`
-	Context           string             `json:"context"`
-	Namespace         string             `json:"namespace,omitempty"`
-	Profile           Profile            `json:"profile"`
-	ClusterIdentity   string             `json:"cluster_identity"`
-	StateHash         string             `json:"state_hash"`
-	Destructive       bool               `json:"destructive"`
-	BackupReference   string             `json:"backup_reference,omitempty"`
-	EvidenceLocation  string             `json:"evidence_location"`
-	DataLossInventory map[string]int64   `json:"data_loss_inventory,omitempty"`
-	CreatedAt         time.Time          `json:"created_at"`
-	ExpiresAt         time.Time          `json:"expires_at"`
-	ConsumedAt        *time.Time         `json:"consumed_at,omitempty"`
-	Operations        []OperationSummary `json:"operations"`
+	ID                string              `json:"id"`
+	Action            string              `json:"action"`
+	Context           string              `json:"context"`
+	Namespace         string              `json:"namespace,omitempty"`
+	Profile           Profile             `json:"profile"`
+	ClusterIdentity   string              `json:"cluster_identity"`
+	StateHash         string              `json:"state_hash"`
+	Destructive       bool                `json:"destructive"`
+	BackupReference   string              `json:"backup_reference,omitempty"`
+	EvidenceLocation  string              `json:"evidence_location"`
+	DataLossInventory map[string][]string `json:"data_loss_inventory,omitempty"`
+	CreatedAt         time.Time           `json:"created_at"`
+	ExpiresAt         time.Time           `json:"expires_at"`
+	ConsumedAt        *time.Time          `json:"consumed_at,omitempty"`
+	Operations        []OperationSummary  `json:"operations"`
 }
 
 func (p Plan) ConfirmationToken() string {

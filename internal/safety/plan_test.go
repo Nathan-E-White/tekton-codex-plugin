@@ -98,12 +98,12 @@ func TestPlanBindsEvidenceAndDataLossInventory(t *testing.T) {
 	plan, err := store.Create(safety.PlanInput{
 		Action: "teardown", Context: "kind-tekton", Namespace: "ci", Profile: safety.ProfileDev,
 		ClusterIdentity: "cluster-a", StateHash: "state-a", Destructive: true,
-		EvidenceLocation: "/tmp/evidence.jsonl", DataLossInventory: map[string]int64{"tekton.dev/pipelineruns": 7},
+		EvidenceLocation: "/tmp/evidence.jsonl", DataLossInventory: map[string][]string{"tekton.dev/pipelineruns": {"ci/run-7@42"}},
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.EvidenceLocation != "/tmp/evidence.jsonl" || plan.DataLossInventory["tekton.dev/pipelineruns"] != 7 {
+	if plan.EvidenceLocation != "/tmp/evidence.jsonl" || plan.DataLossInventory["tekton.dev/pipelineruns"][0] != "ci/run-7@42" {
 		t.Fatalf("plan did not bind safety evidence: %#v", plan)
 	}
 }

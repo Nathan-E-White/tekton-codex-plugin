@@ -191,8 +191,8 @@ func (c *Client) Deployments(ctx context.Context, namespace string) ([]Deploymen
 	return result, nil
 }
 
-func (c *Client) DataLossInventory(ctx context.Context) (map[string]int64, error) {
-	result := map[string]int64{}
+func (c *Client) DataLossInventory(ctx context.Context) (map[string][]string, error) {
+	result := map[string][]string{}
 	for _, tracked := range trackedResources {
 		var resource dynamic.ResourceInterface
 		if tracked.Namespaced {
@@ -205,13 +205,18 @@ func (c *Client) DataLossInventory(ctx context.Context) (map[string]int64, error
 		if err != nil {
 			return nil, fmt.Errorf("enumerate %s: %w", gvr.Resource, err)
 		}
-		var count int64
+		objects := []string{}
 		for _, item := range list.Items {
 			if relevantToTekton(gvr, item) {
-				count++
+				identity := item.GetName() + "@" + item.GetResourceVersion()
+				if item.GetNamespace() != "" {
+					identity = item.GetNamespace() + "/" + identity
+				}
+				objects = append(objects, identity)
 			}
 		}
-		result[gvr.Group+"/"+gvr.Resource] = count
+		sort.Strings(objects)
+		result[gvr.Group+"/"+gvr.Resource] = objects
 	}
 	return result, nil
 }

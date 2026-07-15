@@ -289,15 +289,48 @@ func (s *Service) exportBackup(ctx context.Context, _ *mcp.CallToolRequest, in B
 	if strings.TrimSpace(in.ExternalDatabaseReference) == "" {
 		return nil, Output{}, errors.New("external Results database backup reference is required")
 	}
-	args := []string{"--context", in.Context, "get", "pipelines.tekton.dev,tasks.tekton.dev,pipelineruns.tekton.dev,taskruns.tekton.dev,eventlisteners.triggers.tekton.dev,triggerbindings.triggers.tekton.dev,triggertemplates.triggers.tekton.dev", "--all-namespaces", "-o", "yaml", "--ignore-not-found"}
-	result, err := runner.Runner{Timeout: 60 * time.Second, MaxBytes: 8 * 1024 * 1024}.Run(ctx, "kubectl", args, nil)
-	if err != nil {
-		return nil, Output{}, fmt.Errorf("resource export failed: %w: %s", err, result.Output)
+	if _, err := cluster.New(in.Context, in.Namespace); err != nil {
+		return nil, Output{}, err
 	}
-	digest := sha256.Sum256([]byte(result.Output))
+	exportRunner := runner.Runner{Timeout: 60 * time.Second, MaxBytes: 8 * 1024 * 1024}
+	resources := []string{
+		"pipelines.tekton.dev", "tasks.tekton.dev", "pipelineruns.tekton.dev", "taskruns.tekton.dev", "customruns.tekton.dev",
+		"eventlisteners.triggers.tekton.dev", "triggerbindings.triggers.tekton.dev", "triggertemplates.triggers.tekton.dev",
+		"clustertriggerbindings.triggers.tekton.dev", "repositories.pipelinesascode.tekton.dev",
+	}
+	var exported strings.Builder
+	for _, resource := range resources {
+		args := []string{"--context", in.Context, "get", resource, "--all-namespaces", "-o", "yaml", "--ignore-not-found"}
+		if strings.HasPrefix(resource, "clustertriggerbindings.") {
+			args = []string{"--context", in.Context, "get", resource, "-o", "yaml", "--ignore-not-found"}
+		}
+		result, runErr := exportRunner.Run(ctx, "kubectl", args, nil)
+		if runErr != nil {
+			lower := strings.ToLower(result.Output)
+			if strings.Contains(lower, "server doesn't have a resource type") || strings.Contains(lower, "couldn't find resource") {
+				continue
+			}
+			return nil, Output{}, fmt.Errorf("resource export failed for %s: %w: %s", resource, runErr, result.Output)
+		}
+		if strings.TrimSpace(result.Output) != "" {
+			fmt.Fprintf(&exported, "---\n# resource: %s\n%s\n", resource, result.Output)
+		}
+	}
+	for _, namespace := range []string{"tekton-pipelines", "tekton-chains", "pipelines-as-code"} {
+		args := []string{"--context", in.Context, "--namespace", namespace, "get", "configmaps", "-o", "yaml", "--ignore-not-found"}
+		result, runErr := exportRunner.Run(ctx, "kubectl", args, nil)
+		if runErr != nil {
+			return nil, Output{}, fmt.Errorf("configuration export failed for %s: %w: %s", namespace, runErr, result.Output)
+		}
+		if strings.TrimSpace(result.Output) != "" {
+			fmt.Fprintf(&exported, "---\n# namespace: %s; resource: configmaps\n%s\n", namespace, result.Output)
+		}
+	}
+	exportBytes := []byte(exported.String())
+	digest := sha256.Sum256(exportBytes)
 	hash := hex.EncodeToString(digest[:])
 	path := filepath.Join(s.artifacts, "teardown-export-"+hash[:16]+".yaml")
-	if err := os.WriteFile(path, []byte(result.Output), 0o600); err != nil {
+	if err := os.WriteFile(path, exportBytes, 0o600); err != nil {
 		return nil, Output{}, err
 	}
 	proof := map[string]any{"context": in.Context, "namespace": in.Namespace, "resource_export": path, "sha256": hash, "external_database_reference": in.ExternalDatabaseReference, "created_at": time.Now().UTC()}
@@ -326,7 +359,7 @@ func (s *Service) planPlatform(ctx context.Context, _ *mcp.CallToolRequest, in P
 		return nil, Output{}, err
 	}
 	operations := []safety.Operation{}
-	var inventory map[string]int64
+	var inventory map[string][]string
 	switch in.Action {
 	case "install", "reconcile", "repair":
 		for _, item := range bundle.Components {
