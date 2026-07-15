@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton Operations"
+  short_description: "Diagnose and clean up Tekton workloads"
+  default_prompt: "Use $tekton-operations to inspect, diagnose, or safely clean up this Tekton workload."

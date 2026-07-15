@@ -1,0 +1,28 @@
+{
+  "name": "tekton",
+  "version": "0.1.0",
+  "description": "Guarded upstream Tekton lifecycle, pipeline, trigger, provenance, results, and GitHub Pipelines-as-Code workflows for Codex.",
+  "author": {
+    "name": "Nathan E White",
+    "url": "https://github.com/Nathan-E-White"
+  },
+  "repository": "https://github.com/Nathan-E-White/tekton-codex-plugin",
+  "homepage": "https://github.com/Nathan-E-White/tekton-codex-plugin",
+  "license": "Unlicense",
+  "keywords": ["tekton", "kubernetes", "ci-cd", "pipelines", "supply-chain"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Tekton",
+    "shortDescription": "Operate upstream Tekton through guarded plans.",
+    "longDescription": "Author, validate, inspect, install, reconcile, run, diagnose, and tear down a pinned upstream Tekton bundle through focused skills and a local Go MCP server.",
+    "developerName": "Nathan E White",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Inspect this cluster and report Tekton component health.",
+      "Validate this Tekton Pipeline before applying it.",
+      "Plan a guarded Tekton workload or platform change."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

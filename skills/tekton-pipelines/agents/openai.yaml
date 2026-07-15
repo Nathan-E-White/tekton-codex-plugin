@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton Pipelines"
+  short_description: "Author and operate Tekton pipelines"
+  default_prompt: "Use $tekton-pipelines to validate and operate this Task or Pipeline safely."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton Pipelines as Code"
+  short_description: "Manage GitHub-native Tekton pipelines"
+  default_prompt: "Use $tekton-pipelines-as-code to plan this GitHub Pipelines-as-Code workflow."

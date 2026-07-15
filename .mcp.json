@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tekton": {
+      "command": "./scripts/launch-tekton-mcp.sh",
+      "env_vars": ["KUBECONFIG", "TEKTON_MCP_MANIFEST_ROOTS", "TEKTON_MCP_ARTIFACT_DIR"]
+    }
+  }
+}

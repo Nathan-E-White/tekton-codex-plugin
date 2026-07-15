@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: gofmt -w cmd internal && git diff --exit-code
+      - run: go vet ./...
+      - run: go test -race ./internal/...
+      - run: go test ./...
+      - run: python3 scripts/validate-package.py
+      - run: scripts/verify-webhook-fixture.sh
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: scripts/package-release.sh 0.1.0
+      - run: shasum -a 256 -c dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-archives
+          path: dist/
+
+  kind-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - run: scripts/kind-smoke.sh

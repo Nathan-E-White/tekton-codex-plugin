@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton"
+  short_description: "Route guarded Tekton workflows"
+  default_prompt: "Use $tekton to route this Tekton request to the correct guarded workflow."

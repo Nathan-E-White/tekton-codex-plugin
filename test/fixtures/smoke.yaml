@@ -1,0 +1,11 @@
+apiVersion: tekton.dev/v1
+kind: TaskRun
+metadata:
+  name: tekton-codex-smoke
+spec:
+  taskSpec:
+    steps:
+      - name: hello
+        image: alpine:3.21
+        command: ["/bin/sh", "-c"]
+        args: ["printf 'tekton-codex-plugin smoke ok\\n'"]
