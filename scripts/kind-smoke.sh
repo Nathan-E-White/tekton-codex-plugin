@@ -119,7 +119,7 @@ wait_taskrun tekton-codex-trigger-smoke
 
 # Cancellation is exercised against a live PipelineRun, not a mocked client.
 k apply -f test/fixtures/cancel-smoke.yaml
-k -n default patch pipelinerun tekton-codex-cancel-smoke --type merge -p '{"spec":{"status":"PipelineRunCancelled"}}'
+k -n default patch pipelinerun tekton-codex-cancel-smoke --type merge -p '{"spec":{"status":"Cancelled"}}'
 k -n default wait --for=jsonpath='{.status.conditions[0].reason}'=Cancelled pipelinerun/tekton-codex-cancel-smoke --timeout=180s
 
 # Query the Results API with a short-lived service-account token; neither token nor bodies enter logs.
