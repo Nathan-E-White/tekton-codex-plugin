@@ -25,6 +25,24 @@ func TestDeploymentClassificationAndVersionNormalization(t *testing.T) {
 	}
 }
 
+func TestPlatformActionsRequireTheExpectedBundleState(t *testing.T) {
+	cases := []struct {
+		action string
+		state  string
+		ok     bool
+	}{
+		{"install", "clean", true}, {"install", "partial", false},
+		{"reconcile", "pinned", true}, {"reconcile", "partial", false},
+		{"repair", "partial", true}, {"teardown", "partial", true},
+	}
+	for _, tc := range cases {
+		err := validatePlatformBundleState(tc.action, tc.state)
+		if (err == nil) != tc.ok {
+			t.Fatalf("validatePlatformBundleState(%q, %q) error = %v", tc.action, tc.state, err)
+		}
+	}
+}
+
 func TestInspectTKNRejectsUnsupportedClient(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tkn")

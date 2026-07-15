@@ -38,16 +38,28 @@ var (
 	namespacesGVR               = schema.GroupVersionResource{Version: "v1", Resource: "namespaces"}
 	deploymentsGVR              = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 	selfSubjectAccessReviewsGVR = schema.GroupVersionResource{Group: "authorization.k8s.io", Version: "v1", Resource: "selfsubjectaccessreviews"}
-	tektonGVRs                  = []schema.GroupVersionResource{
-		{Group: "tekton.dev", Version: "v1", Resource: "tasks"},
-		{Group: "tekton.dev", Version: "v1", Resource: "pipelines"},
-		{Group: "tekton.dev", Version: "v1", Resource: "taskruns"},
-		{Group: "tekton.dev", Version: "v1", Resource: "pipelineruns"},
-		{Group: "triggers.tekton.dev", Version: "v1beta1", Resource: "eventlisteners"},
-		{Group: "triggers.tekton.dev", Version: "v1beta1", Resource: "triggerbindings"},
-		{Group: "triggers.tekton.dev", Version: "v1beta1", Resource: "triggertemplates"},
+	trackedResources            = []trackedResource{
+		{schema.GroupVersionResource{Group: "tekton.dev", Version: "v1", Resource: "tasks"}, true},
+		{schema.GroupVersionResource{Group: "tekton.dev", Version: "v1", Resource: "pipelines"}, true},
+		{schema.GroupVersionResource{Group: "tekton.dev", Version: "v1", Resource: "taskruns"}, true},
+		{schema.GroupVersionResource{Group: "tekton.dev", Version: "v1", Resource: "pipelineruns"}, true},
+		{schema.GroupVersionResource{Group: "tekton.dev", Version: "v1beta1", Resource: "customruns"}, true},
+		{schema.GroupVersionResource{Group: "triggers.tekton.dev", Version: "v1beta1", Resource: "eventlisteners"}, true},
+		{schema.GroupVersionResource{Group: "triggers.tekton.dev", Version: "v1beta1", Resource: "triggerbindings"}, true},
+		{schema.GroupVersionResource{Group: "triggers.tekton.dev", Version: "v1beta1", Resource: "triggertemplates"}, true},
+		{schema.GroupVersionResource{Group: "triggers.tekton.dev", Version: "v1beta1", Resource: "clustertriggerbindings"}, false},
+		{schema.GroupVersionResource{Group: "pipelinesascode.tekton.dev", Version: "v1alpha1", Resource: "repositories"}, true},
+		{schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}, true},
+		{schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}, false},
+		{schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingwebhookconfigurations"}, false},
+		{schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingwebhookconfigurations"}, false},
 	}
 )
+
+type trackedResource struct {
+	GVR        schema.GroupVersionResource
+	Namespaced bool
+}
 
 func New(contextName, namespace string) (*Client, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -130,8 +142,15 @@ func (c *Client) StateHash(ctx context.Context) (string, error) {
 		sort.Strings(items)
 		state[namespace] = items
 	}
-	for _, gvr := range tektonGVRs {
-		list, err := c.Kubernetes.Resource(gvr).Namespace(c.Namespace).List(ctx, metav1.ListOptions{})
+	for _, tracked := range trackedResources {
+		var resource dynamic.ResourceInterface
+		if tracked.Namespaced {
+			resource = c.Kubernetes.Resource(tracked.GVR).Namespace(metav1.NamespaceAll)
+		} else {
+			resource = c.Kubernetes.Resource(tracked.GVR)
+		}
+		list, err := resource.List(ctx, metav1.ListOptions{})
+		gvr := tracked.GVR
 		key := gvr.Group + "/" + gvr.Resource
 		if err != nil {
 			state[key] = "unavailable"
@@ -174,14 +193,45 @@ func (c *Client) Deployments(ctx context.Context, namespace string) ([]Deploymen
 
 func (c *Client) DataLossInventory(ctx context.Context) (map[string]int64, error) {
 	result := map[string]int64{}
-	for _, gvr := range tektonGVRs {
-		list, err := c.Kubernetes.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	for _, tracked := range trackedResources {
+		var resource dynamic.ResourceInterface
+		if tracked.Namespaced {
+			resource = c.Kubernetes.Resource(tracked.GVR).Namespace(metav1.NamespaceAll)
+		} else {
+			resource = c.Kubernetes.Resource(tracked.GVR)
+		}
+		list, err := resource.List(ctx, metav1.ListOptions{})
+		gvr := tracked.GVR
 		if err != nil {
 			return nil, fmt.Errorf("enumerate %s: %w", gvr.Resource, err)
 		}
-		result[gvr.Group+"/"+gvr.Resource] = int64(len(list.Items))
+		var count int64
+		for _, item := range list.Items {
+			if relevantToTekton(gvr, item) {
+				count++
+			}
+		}
+		result[gvr.Group+"/"+gvr.Resource] = count
 	}
 	return result, nil
+}
+
+func relevantToTekton(gvr schema.GroupVersionResource, item unstructured.Unstructured) bool {
+	if strings.Contains(gvr.Group, "tekton.dev") {
+		return true
+	}
+	name := strings.ToLower(item.GetName())
+	if gvr.Resource == "customresourcedefinitions" || strings.Contains(gvr.Resource, "webhookconfigurations") {
+		return strings.Contains(name, "tekton") || strings.Contains(name, "pipelines-as-code")
+	}
+	if gvr.Resource == "configmaps" {
+		switch item.GetNamespace() {
+		case "tekton-pipelines", "tekton-chains", "pipelines-as-code":
+			return true
+		}
+		return strings.Contains(name, "tekton") || strings.Contains(name, "pipelines-as-code")
+	}
+	return false
 }
 
 func (c *Client) ListRuns(ctx context.Context, namespace, kind string, limit int64) (any, error) {

@@ -171,7 +171,7 @@ func (s *Service) preflight(ctx context.Context, _ *mcp.CallToolRequest, in Scop
 	if err != nil {
 		return nil, Output{}, err
 	}
-	components, supported, err := inspectBundle(ctx, c)
+	components, compatible, bundleState, err := inspectBundle(ctx, c)
 	if err != nil {
 		return nil, Output{}, err
 	}
@@ -196,7 +196,7 @@ func (s *Service) preflight(ctx context.Context, _ *mcp.CallToolRequest, in Scop
 		rbac[name] = map[string]any{"allowed": allowed, "reason": reason}
 		rbacReady = rbacReady && allowed
 	}
-	return nil, Output{OK: supported && rbacReady && tknSupported, Data: map[string]any{"context": c.Context, "namespace": c.Namespace, "cluster_identity": identity, "state_hash": state, "bundle_supported": supported, "rbac_ready": rbacReady, "rbac": rbac, "components": components, "manifest_roots": roots, "tkn": tknReport}}, nil
+	return nil, Output{OK: compatible && bundleState == "pinned" && rbacReady && tknSupported, Data: map[string]any{"context": c.Context, "namespace": c.Namespace, "cluster_identity": identity, "state_hash": state, "bundle_compatible": compatible, "bundle_state": bundleState, "rbac_ready": rbacReady, "rbac": rbac, "components": components, "manifest_roots": roots, "tkn": tknReport}}, nil
 }
 
 func (s *Service) validate(ctx context.Context, _ *mcp.CallToolRequest, in ValidateInput) (*mcp.CallToolResult, Output, error) {
@@ -315,12 +315,15 @@ func (s *Service) planPlatform(ctx context.Context, _ *mcp.CallToolRequest, in P
 	if err != nil {
 		return nil, Output{}, err
 	}
-	components, supported, err := inspectBundle(ctx, c)
+	components, compatible, bundleState, err := inspectBundle(ctx, c)
 	if err != nil {
 		return nil, Output{}, err
 	}
-	if !supported {
+	if !compatible {
 		return nil, Output{}, fmt.Errorf("unsupported or mixed Tekton component bundle: %v", components)
+	}
+	if err := validatePlatformBundleState(in.Action, bundleState); err != nil {
+		return nil, Output{}, err
 	}
 	operations := []safety.Operation{}
 	var inventory map[string]int64
@@ -360,8 +363,11 @@ func (s *Service) planResources(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, Output{}, err
 	}
-	_, identity, state, err := scoped(ctx, in.Context, in.Namespace)
+	c, identity, state, err := scoped(ctx, in.Context, in.Namespace)
 	if err != nil {
+		return nil, Output{}, err
+	}
+	if err := requirePinnedBundle(ctx, c); err != nil {
 		return nil, Output{}, err
 	}
 	dryRunArgs := []string{"--context", in.Context, "--namespace", in.Namespace, in.Action, "--dry-run=server", "-f", "-"}
@@ -383,8 +389,11 @@ func (s *Service) planResources(ctx context.Context, _ *mcp.CallToolRequest, in 
 }
 
 func (s *Service) planRun(ctx context.Context, _ *mcp.CallToolRequest, in RunPlanInput) (*mcp.CallToolResult, Output, error) {
-	_, identity, state, err := scoped(ctx, in.Context, in.Namespace)
+	c, identity, state, err := scoped(ctx, in.Context, in.Namespace)
 	if err != nil {
+		return nil, Output{}, err
+	}
+	if err := requirePinnedBundle(ctx, c); err != nil {
 		return nil, Output{}, err
 	}
 	if report, supported := s.inspectTKN(ctx); !supported {
@@ -461,14 +470,15 @@ func planResponse(plan safety.Plan) map[string]any {
 	return map[string]any{"plan": plan, "confirmation": plan.ConfirmationToken()}
 }
 
-func inspectBundle(ctx context.Context, c *cluster.Client) (map[string]any, bool, error) {
+func inspectBundle(ctx context.Context, c *cluster.Client) (map[string]any, bool, string, error) {
 	reports := map[string]any{}
-	supported := true
+	compatible := true
+	present := 0
 	for _, component := range bundle.Components {
 		deployments, err := c.Deployments(ctx, component.Namespace)
 		if err != nil {
 			reports[component.Name] = map[string]any{"expected": component.Version, "status": "unavailable", "error": safety.Redact(err.Error())}
-			supported = false
+			compatible = false
 			continue
 		}
 		matched := make([]cluster.DeploymentInfo, 0)
@@ -498,14 +508,18 @@ func inspectBundle(ctx context.Context, c *cluster.Client) (map[string]any, bool
 		if len(matched) == 0 {
 			status = "absent"
 		} else if unknown {
+			present++
 			status = "unknown"
-			supported = false
+			compatible = false
 		} else if len(versions) != 1 || !versionSetContains(versions, component.Version) {
+			present++
 			status = "unsupported"
 			if len(versions) > 1 {
 				status = "mixed"
 			}
-			supported = false
+			compatible = false
+		} else {
+			present++
 		}
 		observed := make([]string, 0, len(versions))
 		for version := range versions {
@@ -513,7 +527,44 @@ func inspectBundle(ctx context.Context, c *cluster.Client) (map[string]any, bool
 		}
 		reports[component.Name] = map[string]any{"expected": component.Version, "status": status, "observed_versions": observed, "deployments": matched}
 	}
-	return reports, supported, nil
+	state := "partial"
+	if present == 0 {
+		state = "clean"
+	} else if present == len(bundle.Components) {
+		state = "pinned"
+	}
+	return reports, compatible, state, nil
+}
+
+func validatePlatformBundleState(action, state string) error {
+	valid := false
+	switch action {
+	case "install":
+		valid = state == "clean"
+	case "reconcile":
+		valid = state == "pinned"
+	case "repair":
+		valid = state == "partial" || state == "pinned"
+	case "teardown":
+		valid = state == "partial" || state == "pinned"
+	default:
+		return fmt.Errorf("unsupported platform action %q", action)
+	}
+	if !valid {
+		return fmt.Errorf("platform action %q is invalid for bundle state %q", action, state)
+	}
+	return nil
+}
+
+func requirePinnedBundle(ctx context.Context, c *cluster.Client) error {
+	reports, compatible, state, err := inspectBundle(ctx, c)
+	if err != nil {
+		return err
+	}
+	if !compatible || state != "pinned" {
+		return fmt.Errorf("operation requires the complete pinned bundle: state=%s components=%v", state, reports)
+	}
+	return nil
 }
 
 func versionSetContains(versions map[string]bool, expected string) bool {
