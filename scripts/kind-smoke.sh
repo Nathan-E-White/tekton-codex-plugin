@@ -88,9 +88,8 @@ wait_taskrun tekton-codex-task-smoke
 
 for run in tekton-codex-task-smoke; do
   k -n default wait --for=jsonpath='{.metadata.annotations.chains\.tekton\.dev/signed}'=true "taskrun/$run" --timeout=300s
-  test -n "$(k -n default get "taskrun/$run" -o jsonpath='{.metadata.annotations.chains\.tekton\.dev/signature-taskrun-*}' 2>/dev/null || true)" || \
-    k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/signature-taskrun-"))' >/dev/null
-  k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/payload-taskrun-"))' >/dev/null
+  k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/signature-"))' >/dev/null
+  k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/payload-"))' >/dev/null
   k -n default wait --for=jsonpath='{.metadata.annotations.results\.tekton\.dev/result}' "taskrun/$run" --timeout=300s
   k -n default wait --for=jsonpath='{.metadata.annotations.results\.tekton\.dev/record}' "taskrun/$run" --timeout=300s
 done
