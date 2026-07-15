@@ -11,6 +11,8 @@ GitHub is the only first-class SCM provider in v0.1.0.
 2. Keep GitHub App private keys and webhook secrets in referenced Kubernetes Secrets; never pass them through MCP arguments or evidence.
 3. Validate `.tekton/` PipelineRuns and event filters before planning changes.
 4. Confirm check-run permissions and branch protection expectations.
-5. Use signed webhook fixtures in ordinary tests and a credentialed manual smoke test before release.
+5. Use `scripts/verify-webhook-fixture.sh` for the secret-free signature contract in ordinary CI. This proves fixture integrity only; it does not prove GitHub delivery or check reporting.
+6. Before release, run `.github/workflows/github-app-smoke.yml` against a pull request containing `.tekton/pac-smoke.yaml`. Supply only the documented GitHub environment secret and variable names; never print their values or persist the private key.
+7. Treat the credentialed smoke as complete only when one evidence run observes webhook delivery, PipelineRun creation, a check run owned by the configured App, and successful `/test`, `/retest`, and `/cancel` transitions.
 
 Do not claim GitHub integration is verified until event delivery, PipelineRun creation, check reporting, and ChatOps have all succeeded live.

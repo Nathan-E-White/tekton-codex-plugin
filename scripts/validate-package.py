@@ -19,4 +19,27 @@ for skill_file in skill_paths:
     assert len(defaults) == 1 and defaults[0].count("\n") == 0, path
 for required in ["README.md", "UNLICENSE", "CONTEXT.md", ".mcp.json", "scripts/launch-tekton-mcp.sh"]:
     assert (root / required).is_file(), required
+
+integration_contract = {
+    "scripts/kind-smoke.sh": [
+        "pipeline/releases/download/v1.14.0/release.yaml",
+        "triggers/releases/download/v0.36.0/release.yaml",
+        "chains/releases/download/v0.28.0/release.yaml",
+        "results/releases/download/v0.19.0/release.yaml",
+        "pipelines-as-code/releases/download/v0.49.0/release.k8s.yaml",
+    ],
+    "scripts/github-app-smoke.sh": [
+        "GITHUB_APP_ID",
+        "GITHUB_APP_INSTALLATION_ID",
+        "GITHUB_APP_PRIVATE_KEY",
+        "GITHUB_WEBHOOK_SECRET",
+        "/test",
+        "/retest",
+        "/cancel",
+    ],
+}
+for relative, markers in integration_contract.items():
+    body = (root / relative).read_text()
+    for marker in markers:
+        assert marker in body, f"{relative} must cover {marker}"
 print("plugin package structure valid")

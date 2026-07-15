@@ -12,3 +12,5 @@ description: Inspect, install, reconcile, repair, or fully tear down the pinned 
 5. Execute only the returned plan ID and exact confirmation token.
 
 Reject older, newer, or mixed versions instead of improvising an upgrade. Install in dependency order and tear down in reverse order. For staging or production teardown, first use `tekton_export_teardown_backup` and supply an external Results database backup reference.
+
+Use `scripts/kind-smoke.sh` as the disposable-cluster release gate. It covers the pinned bundle, reconciliation, repair, Pipelines and Triggers execution, Chains and Results evidence, cancellation, and reverse-order teardown. It does not replace the credentialed GitHub App smoke.
