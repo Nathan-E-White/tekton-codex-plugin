@@ -1,0 +1,49 @@
+Tekton upstream brand and artwork notice
+========================================
+
+This plugin includes official SVG artwork from the Continuous Delivery
+Foundation artwork repository. The bundled files differ only by a trailing
+newline from the upstream SVG files:
+
+  Source revision: 80b1a2f4061477fd3f700993846e6ca08e5d5d7e
+  Source: https://github.com/cdfoundation/artwork/tree/master/former_project_logos/tekton
+  Composer icon: former_project_logos/tekton/icon/color/tekton-icon-color.svg
+  Full logo: former_project_logos/tekton/horizontal/color/tekton-horizontal-color.svg
+  Dark-mode logo: former_project_logos/tekton/horizontal/white/tekton-horizontal-white.svg
+  Brand guide: https://github.com/cdfoundation/artwork/blob/master/former_project_logos/tekton/tekton_brand_guide.pdf
+
+The manifest brand color is #00109F, the primary color declared by the official
+Tekton website from its logo design guide:
+
+  https://github.com/tektoncd/website/blob/main/assets/scss/_variables_project.scss
+
+The bundled icon retains the official #2B338C, #F0515A, and #A677B4 gradient.
+
+The dashboard also embeds format-converted artwork from the upstream Tekton
+Dashboard repository:
+
+  Source: https://github.com/tektoncd/dashboard
+  Source revision: 6c6ffd8228de9e4bb48739fcef1daca7e6e4068d
+  Composer icon source: src/images/favicon.png
+  Full logo source: src/images/tekton-stacked-color.svg
+
+The upstream repository is licensed under the Apache License, Version 2.0.
+The complete upstream license text is included in
+TEKTON-UPSTREAM-LICENSE-APACHE-2.0.txt and is also available at:
+
+  https://github.com/tektoncd/dashboard/blob/main/LICENSE
+  https://www.apache.org/licenses/LICENSE-2.0
+
+The plugin's own source remains licensed under the Unlicense as stated at the
+plugin root. The upstream artwork is not relicensed under the Unlicense.
+
+Tekton™ is a trademark of The Linux Foundation. Use of the Tekton name and
+official artwork remains subject to The Linux Foundation Trademark Usage
+Guidelines and trademark list:
+
+  https://www.linuxfoundation.org/trademark-usage/
+  https://www.linuxfoundation.org/legal/trademarks
+  https://github.com/cdfoundation/artwork/blob/master/former_project_logos/tekton/usage_guidelines.md
+
+This independent community plugin is not affiliated with, sponsored by, or
+endorsed by the Tekton project, the CD Foundation, or The Linux Foundation.

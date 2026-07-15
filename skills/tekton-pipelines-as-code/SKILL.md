@@ -5,7 +5,7 @@ description: Configure and diagnose GitHub-first Tekton Pipelines-as-Code workfl
 
 # Tekton Pipelines as Code
 
-GitHub is the only first-class SCM provider in v0.1.0.
+GitHub is the only first-class SCM provider in v0.2.0.
 
 1. Inspect PAC health, GitHub App references, webhook delivery, Repository CR status, and `.tekton/` files.
 2. Keep GitHub App private keys and webhook secrets in referenced Kubernetes Secrets; never pass them through MCP arguments or evidence.

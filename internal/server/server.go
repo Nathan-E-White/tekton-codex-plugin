@@ -15,6 +15,7 @@ import (
 	"github.com/Nathan-E-White/tekton-codex-plugin/internal/bundle"
 	"github.com/Nathan-E-White/tekton-codex-plugin/internal/cluster"
 	"github.com/Nathan-E-White/tekton-codex-plugin/internal/manifest"
+	"github.com/Nathan-E-White/tekton-codex-plugin/internal/mcpapp"
 	"github.com/Nathan-E-White/tekton-codex-plugin/internal/runner"
 	"github.com/Nathan-E-White/tekton-codex-plugin/internal/safety"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -135,35 +136,53 @@ func New() (*mcp.Server, error) {
 		}
 	}
 	service := &Service{plans: store, runner: runner.Runner{Timeout: 30 * time.Second, MaxBytes: 256 * 1024}, paths: policy, artifacts: artifacts}
-	server := mcp.NewServer(&mcp.Implementation{Name: "tekton", Title: "Tekton Codex Plugin", Version: "0.1.0", WebsiteURL: "https://github.com/Nathan-E-White/tekton-codex-plugin"}, &mcp.ServerOptions{Instructions: instructions})
+	server := mcp.NewServer(&mcp.Implementation{Name: "tekton", Title: "Tekton Codex Plugin", Version: "0.2.0", WebsiteURL: "https://github.com/Nathan-E-White/tekton-codex-plugin"}, &mcp.ServerOptions{Instructions: instructions})
+	mcpapp.Register(server)
 	service.addTools(server)
 	return server, nil
 }
 
 func (s *Service) addTools(server *mcp.Server) {
+	closed := false
 	readOnly := func(title string) *mcp.ToolAnnotations {
-		return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, IdempotentHint: true}
+		return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, IdempotentHint: true, OpenWorldHint: &closed}
 	}
 	plan := func(title string) *mcp.ToolAnnotations {
 		value := false
-		return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, DestructiveHint: &value, IdempotentHint: true}
+		return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, DestructiveHint: &value, IdempotentHint: true, OpenWorldHint: &closed}
 	}
 	execute := func(title string) *mcp.ToolAnnotations {
 		value := true
-		return &mcp.ToolAnnotations{Title: title, DestructiveHint: &value}
+		return &mcp.ToolAnnotations{Title: title, DestructiveHint: &value, OpenWorldHint: &closed}
 	}
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_preflight", Description: "Resolve explicit cluster scope, RBAC reachability, pinned bundle health, and manifest roots.", Annotations: readOnly("Tekton preflight")}, s.preflight)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_validate", Description: "Validate inline or allowed-root YAML and run Kubernetes server-side dry-run.", Annotations: readOnly("Validate Tekton resources")}, s.validate)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_list_runs", Description: "List PipelineRuns or TaskRuns with status and timing.", Annotations: readOnly("List Tekton runs")}, s.listRuns)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_get_run", Description: "Get one PipelineRun or TaskRun, including conditions, steps, timing, and ownership.", Annotations: readOnly("Get Tekton run")}, s.getRun)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_get_logs", Description: "Fetch bounded, timed, redacted run logs without persistence.", Annotations: readOnly("Get bounded Tekton logs")}, s.getLogs)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_query_results", Description: "Query Tekton Results records and retention metadata.", Annotations: readOnly("Query Tekton Results")}, s.queryResults)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_verify_attestation", Description: "Inspect Chains status and verify attestation signatures without reading credential material.", Annotations: readOnly("Verify Tekton attestation")}, s.verifyAttestation)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_export_teardown_backup", Description: "Export non-secret Tekton resources with hashes and bind an external Results database backup reference.", Annotations: readOnly("Export teardown backup")}, s.exportBackup)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_plan_platform", Description: "Create a fresh immutable install, reconcile, repair, or teardown plan for the pinned bundle.", Annotations: plan("Plan Tekton platform change")}, s.planPlatform)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_plan_resources", Description: "Create a fresh immutable apply or delete plan for validated resources.", Annotations: plan("Plan Tekton resource change")}, s.planResources)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_plan_run", Description: "Create a fresh immutable start, retry, cancel, or cleanup plan.", Annotations: plan("Plan Tekton run change")}, s.planRun)
-	mcp.AddTool(server, &mcp.Tool{Name: "tekton_execute_plan", Description: "Execute one fresh immutable plan using its exact confirmation token; drift invalidates it.", Annotations: execute("Execute Tekton plan")}, s.executePlan)
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_preflight", Description: "Resolve explicit cluster scope, RBAC reachability, pinned bundle health, and manifest roots.", Annotations: readOnly("Tekton preflight"), Meta: mcpapp.ToolMeta("Inspecting Tekton cluster scope", "Tekton preflight ready")}, withDashboardResult("tekton_preflight", s.preflight))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_validate", Description: "Validate inline or allowed-root YAML and run Kubernetes server-side dry-run.", Annotations: readOnly("Validate Tekton resources"), Meta: mcpapp.ToolMeta("Validating Tekton resources", "Tekton validation ready")}, withDashboardResult("tekton_validate", s.validate))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_list_runs", Description: "List PipelineRuns or TaskRuns with status and timing.", Annotations: readOnly("List Tekton runs"), Meta: mcpapp.ToolMeta("Listing Tekton runs", "Tekton runs ready")}, withDashboardResult("tekton_list_runs", s.listRuns))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_get_run", Description: "Get one PipelineRun or TaskRun, including conditions, steps, timing, and ownership.", Annotations: readOnly("Get Tekton run"), Meta: mcpapp.ToolMeta("Inspecting Tekton run", "Tekton run ready")}, withDashboardResult("tekton_get_run", s.getRun))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_get_logs", Description: "Fetch bounded, timed, redacted run logs without persistence.", Annotations: readOnly("Get bounded Tekton logs"), Meta: mcpapp.ToolMeta("Fetching bounded Tekton logs", "Tekton logs ready")}, withDashboardResult("tekton_get_logs", s.getLogs))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_query_results", Description: "Query Tekton Results records and retention metadata.", Annotations: readOnly("Query Tekton Results"), Meta: mcpapp.ToolMeta("Querying Tekton Results", "Tekton Results ready")}, withDashboardResult("tekton_query_results", s.queryResults))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_verify_attestation", Description: "Inspect Chains status and verify attestation signatures without reading credential material.", Annotations: readOnly("Verify Tekton attestation"), Meta: mcpapp.ToolMeta("Verifying Tekton attestation", "Attestation verification ready")}, withDashboardResult("tekton_verify_attestation", s.verifyAttestation))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_export_teardown_backup", Description: "Export non-secret Tekton resources with hashes and bind an external Results database backup reference.", Annotations: readOnly("Export teardown backup"), Meta: mcpapp.ToolMeta("Exporting Tekton teardown evidence", "Teardown evidence ready")}, withDashboardResult("tekton_export_teardown_backup", s.exportBackup))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_plan_platform", Description: "Create a fresh immutable install, reconcile, repair, or teardown plan for the pinned bundle.", Annotations: plan("Plan Tekton platform change"), Meta: mcpapp.ToolMeta("Planning Tekton platform change", "Tekton platform plan ready")}, withDashboardResult("tekton_plan_platform", s.planPlatform))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_plan_resources", Description: "Create a fresh immutable apply or delete plan for validated resources.", Annotations: plan("Plan Tekton resource change"), Meta: mcpapp.ToolMeta("Planning Tekton resource change", "Tekton resource plan ready")}, withDashboardResult("tekton_plan_resources", s.planResources))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_plan_run", Description: "Create a fresh immutable start, retry, cancel, or cleanup plan.", Annotations: plan("Plan Tekton run change"), Meta: mcpapp.ToolMeta("Planning Tekton run action", "Tekton run plan ready")}, withDashboardResult("tekton_plan_run", s.planRun))
+	mcp.AddTool(server, &mcp.Tool{Name: "tekton_execute_plan", Description: "Execute one fresh immutable plan using its exact confirmation token; drift invalidates it.", Annotations: execute("Execute Tekton plan"), Meta: mcpapp.ToolMeta("Executing confirmed Tekton plan", "Tekton plan execution finished")}, withDashboardResult("tekton_execute_plan", s.executePlan))
+}
+
+func withDashboardResult[Input any](tool string, handler func(context.Context, *mcp.CallToolRequest, Input) (*mcp.CallToolResult, Output, error)) func(context.Context, *mcp.CallToolRequest, Input) (*mcp.CallToolResult, Output, error) {
+	return func(ctx context.Context, request *mcp.CallToolRequest, input Input) (*mcp.CallToolResult, Output, error) {
+		result, output, err := handler(ctx, request, input)
+		if result == nil {
+			result = &mcp.CallToolResult{}
+		}
+		if result.Meta == nil {
+			result.Meta = mcp.Meta{}
+		}
+		for key, value := range mcpapp.ResultMeta(tool) {
+			result.Meta[key] = value
+		}
+		return result, output, err
+	}
 }
 
 func (s *Service) preflight(ctx context.Context, _ *mcp.CallToolRequest, in ScopeInput) (*mcp.CallToolResult, Output, error) {

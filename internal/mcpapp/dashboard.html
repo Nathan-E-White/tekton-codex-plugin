@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { color-scheme:light dark; --tekton:#2b338c; --tekton-2:#f0515a; --tekton-3:#a677b4; --ink:#15172a; --muted:#687086; --bg:#f5f6fb; --panel:#fff; --line:#dce0ec; --soft:#fff0f1; --ok:#087a55; --warn:#9a6100; --bad:#b42318; --code:#f0f2f8; --shadow:0 16px 45px rgba(43,51,140,.09); }
+    @media (prefers-color-scheme:dark) { :root { --ink:#f4f5ff; --muted:#a9b0c4; --bg:#0e1020; --panel:#171a2e; --line:#2d324b; --soft:#1b2350; --ok:#57d7a3; --warn:#ffcb66; --bad:#ff8580; --code:#0a0c18; --shadow:none; } }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:18px; background:radial-gradient(circle at 85% 0,rgba(166,119,180,.17),transparent 34%),var(--bg); color:var(--ink); font:13px/1.45 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input,select,textarea { font:inherit; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:14px; padding:16px 18px; color:#fff; border-radius:16px; background:linear-gradient(120deg,#a677b4 0%,#f0515a 38%,#2b338c 100%); box-shadow:var(--shadow); }
+    .identity { display:flex; align-items:center; gap:13px; min-width:0; }
+    .identity img { width:54px; height:54px; object-fit:contain; padding:5px; border-radius:13px; background:#fff; }
+    h1 { margin:0; font-size:20px; letter-spacing:.01em; }
+    .subtitle { margin-top:2px; color:#dde1ff; }
+    .badge { display:inline-flex; align-items:center; border:1px solid rgba(255,255,255,.38); border-radius:999px; padding:5px 10px; white-space:nowrap; }
+    .layout { display:grid; grid-template-columns:minmax(280px,1.05fr) minmax(320px,1.45fr); gap:12px; }
+    .panel { padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:var(--shadow); }
+    .panel-title { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    h2 { margin:0; font-size:14px; }
+    .muted { color:var(--muted); }
+    .tools { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .tool { min-height:82px; padding:10px; text-align:left; color:var(--ink); border:1px solid var(--line); border-radius:11px; background:var(--panel); cursor:pointer; }
+    .tool:hover,.tool[aria-pressed="true"] { border-color:var(--tekton-2); background:var(--soft); }
+    .tool strong,.tool span { display:block; }
+    .tool strong { margin-bottom:3px; font-size:12px; overflow-wrap:anywhere; }
+    .tool span { color:var(--muted); font-size:11px; }
+    .tool[data-risk="execute"] { border-left:4px solid var(--bad); }
+    .tool[data-risk="plan"] { border-left:4px solid var(--warn); }
+    .tool[data-risk="read"] { border-left:4px solid var(--ok); }
+    .workspace { display:grid; gap:12px; }
+    .selected { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .risk { padding:3px 8px; border-radius:999px; color:var(--muted); background:var(--code); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+    .risk.execute { color:var(--bad); } .risk.plan { color:var(--warn); } .risk.read { color:var(--ok); }
+    form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    label { display:grid; gap:4px; color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+    label.wide { grid-column:1/-1; }
+    input,select,textarea { width:100%; color:var(--ink); border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:8px 9px; outline:none; }
+    input:focus,select:focus,textarea:focus { border-color:var(--tekton-2); box-shadow:0 0 0 3px rgba(240,81,90,.16); }
+    textarea { min-height:96px; resize:vertical; font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:none; letter-spacing:0; }
+    .actions { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .primary { border:0; border-radius:9px; padding:9px 13px; color:#fff; background:var(--tekton); cursor:pointer; }
+    .primary:hover:not(:disabled) { filter:brightness(1.12); }
+    .primary:disabled { opacity:.45; cursor:not-allowed; }
+    .notice { grid-column:1/-1; padding:9px 10px; border-radius:9px; color:var(--warn); background:color-mix(in srgb,var(--warn) 10%,transparent); }
+    .result-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+    .status { border:1px solid var(--line); border-radius:999px; padding:3px 8px; color:var(--muted); }
+    .status.ok { color:var(--ok); } .status.error { color:var(--bad); }
+    .summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+    .metric { min-height:62px; padding:9px; border:1px solid var(--line); border-radius:9px; }
+    .metric b,.metric span { display:block; overflow-wrap:anywhere; }
+    .metric b { color:var(--muted); font-size:10px; letter-spacing:.06em; text-transform:uppercase; }
+    .metric span { margin-top:5px; font-weight:650; }
+    pre { max-height:330px; overflow:auto; margin:0; padding:11px; border-radius:9px; background:var(--code); color:var(--ink); white-space:pre-wrap; word-break:break-word; font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    footer { margin-top:12px; color:var(--muted); font-size:10px; text-align:center; }
+    @media (max-width:760px) { .layout { grid-template-columns:1fr; } .tools { grid-template-columns:1fr; } .summary { grid-template-columns:1fr; } header { align-items:flex-start; } .badge { display:none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="identity">
+      <img id="tekton-icon" alt="Tekton icon" src="data:image/png;base64,{{TEKTON_ICON}}" />
+      <div><h1>Tekton Operations</h1><div class="subtitle">Inspect first · immutable plans · exact confirmation</div></div>
+    </div>
+    <span class="badge">Pinned bundle · upstream Kubernetes</span>
+  </header>
+  <main class="layout">
+    <section class="panel">
+      <div class="panel-title"><h2>12 MCP tools</h2><span class="muted">Select a workflow</span></div>
+      <div id="tools" class="tools"></div>
+    </section>
+    <section class="workspace">
+      <section class="panel">
+        <div class="selected">
+          <div><h2 id="title">Tekton preflight</h2><div id="description" class="muted"></div></div>
+          <span id="risk" class="risk read">read</span>
+        </div>
+        <form id="form"></form>
+      </section>
+      <section class="panel">
+        <div class="result-head"><h2>Tool result</h2><span id="status" class="status">Waiting</span></div>
+        <div id="summary" class="summary"></div>
+        <pre id="output">Run a tool to populate this dashboard.</pre>
+      </section>
+    </section>
+  </main>
+  <footer>Tekton™ is a trademark of The Linux Foundation. This independent plugin is not affiliated with or endorsed by Tekton, CDF, or The Linux Foundation.</footer>
+  <script>
+    const common = [
+      {key:'context',label:'Kube context',value:'kind-tekton',required:true},
+      {key:'namespace',label:'Namespace',value:'default'}
+    ];
+    const tools = [
+      {name:'tekton_preflight',title:'Preflight',desc:'Cluster identity, RBAC, versions, health, roots.',risk:'read',fields:common},
+      {name:'tekton_validate',title:'Validate resources',desc:'Policy, API, schema, and server dry-run.',risk:'read',fields:[...common,{key:'inline_yaml',label:'Inline YAML',type:'textarea',wide:true},{key:'path',label:'Allowed-root file path',wide:true}]},
+      {name:'tekton_list_runs',title:'List runs',desc:'PipelineRuns and TaskRuns with timing.',risk:'read',fields:[...common,{key:'kind',label:'Kind',type:'select',options:['PipelineRun','TaskRun']},{key:'limit',label:'Limit',type:'number',value:20}]},
+      {name:'tekton_get_run',title:'Get run',desc:'Conditions, steps, ownership, and Results link.',risk:'read',fields:[...common,{key:'kind',label:'Kind',type:'select',options:['PipelineRun','TaskRun'],required:true},{key:'name',label:'Run name',required:true}]},
+      {name:'tekton_get_logs',title:'Bounded logs',desc:'Timed, byte-capped, redacted, never persisted.',risk:'read',fields:[...common,{key:'kind',label:'Kind',type:'select',options:['PipelineRun','TaskRun'],required:true},{key:'name',label:'Run name',required:true},{key:'max_bytes',label:'Maximum bytes',type:'number',value:65536},{key:'timeout_seconds',label:'Timeout seconds',type:'number',value:20}]},
+      {name:'tekton_query_results',title:'Query Results',desc:'Records and retention metadata.',risk:'read',fields:[...common,{key:'filter',label:'Results filter',wide:true},{key:'limit',label:'Limit',type:'number',value:20}]},
+      {name:'tekton_verify_attestation',title:'Verify attestation',desc:'Chains signature and provenance verification.',risk:'read',fields:[...common,{key:'target',label:'Target',required:true,wide:true},{key:'identity',label:'Expected identity'},{key:'issuer',label:'Expected issuer'}]},
+      {name:'tekton_export_teardown_backup',title:'Export backup proof',desc:'Non-secret export plus external DB backup reference.',risk:'read',fields:[...common,{key:'external_database_reference',label:'External Results database backup reference',required:true,wide:true}]},
+      {name:'tekton_plan_platform',title:'Plan platform',desc:'Install, reconcile, repair, or teardown.',risk:'plan',fields:[...common,{key:'profile',label:'Profile',type:'select',options:['dev','stg','prod'],required:true},{key:'action',label:'Action',type:'select',options:['install','reconcile','repair','teardown'],required:true},{key:'backup_reference',label:'Backup proof reference',wide:true}]},
+      {name:'tekton_plan_resources',title:'Plan resources',desc:'Apply or delete validated Tekton resources.',risk:'plan',fields:[...common,{key:'profile',label:'Profile',type:'select',options:['dev','stg','prod'],required:true},{key:'action',label:'Action',type:'select',options:['apply','delete'],required:true},{key:'inline_yaml',label:'Inline YAML',type:'textarea',wide:true},{key:'path',label:'Allowed-root file path',wide:true}]},
+      {name:'tekton_plan_run',title:'Plan run action',desc:'Start, retry, cancel, or clean run history.',risk:'plan',fields:[...common,{key:'profile',label:'Profile',type:'select',options:['dev','stg','prod'],required:true},{key:'action',label:'Action',type:'select',options:['start','retry','cancel','run-cleanup'],required:true},{key:'kind',label:'Kind',type:'select',options:['PipelineRun','TaskRun'],required:true},{key:'name',label:'Run or resource name',required:true}]},
+      {name:'tekton_execute_plan',title:'Execute plan',desc:'Fresh plan, exact token, and drift check only.',risk:'execute',fields:[{key:'plan_id',label:'Plan ID',required:true},{key:'confirmation',label:'Exact CONFIRM token',required:true,wide:true}]}
+    ];
+    const toolList = document.getElementById('tools');
+    const form = document.getElementById('form');
+    const title = document.getElementById('title');
+    const description = document.getElementById('description');
+    const risk = document.getElementById('risk');
+    const status = document.getElementById('status');
+    const output = document.getElementById('output');
+    const summary = document.getElementById('summary');
+    let selected = tools[0];
+    let requestID = 0;
+    const pendingCalls = new Map();
+    const icon = document.getElementById('tekton-icon');
+    if (icon.getAttribute('src').includes('{{TEKTON_ICON}}')) icon.src = '../../assets/composer-icon.png';
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    function selectTool(tool) {
+      selected = tool;
+      [...toolList.children].forEach(el => el.setAttribute('aria-pressed',String(el.dataset.name === tool.name)));
+      title.textContent = tool.title;
+      description.textContent = tool.desc;
+      risk.textContent = tool.risk === 'read' ? 'read only' : tool.risk;
+      risk.className = 'risk ' + tool.risk;
+      const fields = tool.fields.map(field => {
+        const attrs = `name="${field.key}" ${field.required ? 'required' : ''}`;
+        let input;
+        if (field.type === 'select') input = `<select ${attrs}>${field.options.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>`;
+        else if (field.type === 'textarea') input = `<textarea ${attrs} placeholder="Paste YAML here"></textarea>`;
+        else input = `<input ${attrs} type="${field.type === 'number' ? 'number' : 'text'}" value="${esc(field.value ?? '')}" />`;
+        return `<label class="${field.wide ? 'wide' : ''}">${esc(field.label)}${input}</label>`;
+      });
+      if (tool.risk === 'execute') fields.push('<div class="notice">Execution consumes a fresh 15-minute plan only. The server rejects stale plans, drift, profile mismatches, and anything except the exact confirmation token.</div>');
+      fields.push(`<div class="actions"><span class="muted">${tool.risk === 'read' ? 'No cluster mutation' : tool.risk === 'plan' ? 'Creates a plan; does not execute' : 'Mutation boundary'}</span><button class="primary" type="submit">Run ${esc(tool.title)}</button></div>`);
+      form.innerHTML = fields.join('');
+    }
+    function render(value, toolName) {
+      if (!value || typeof value !== 'object') return;
+      const body = value.structuredContent || value.toolOutput || value;
+      const data = body.data ?? body;
+      const ok = body.ok !== false && value.isError !== true;
+      status.textContent = ok ? 'Ready' : 'Error';
+      status.className = 'status ' + (ok ? 'ok' : 'error');
+      const keys = ['context','namespace','bundle_state','bundle_compatible','rbac_ready','plan_id','action','expires_at','run_id','state_hash','sha256','external_database_reference'];
+      summary.innerHTML = keys.filter(key => data && data[key] !== undefined && data[key] !== '').slice(0,6).map(key => `<div class="metric"><b>${esc(key.replaceAll('_',' '))}</b><span>${esc(typeof data[key] === 'object' ? JSON.stringify(data[key]) : data[key])}</span></div>`).join('');
+      output.textContent = JSON.stringify(body,null,2);
+      if (toolName) {
+        const match = tools.find(tool => tool.name === toolName);
+        if (match) selectTool(match);
+      }
+    }
+    tools.forEach(tool => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'tool';
+      button.dataset.name = tool.name;
+      button.dataset.risk = tool.risk;
+      button.innerHTML = `<strong>${esc(tool.title)}</strong><span>${esc(tool.desc)}</span>`;
+      button.addEventListener('click',() => selectTool(tool));
+      toolList.appendChild(button);
+    });
+    function callTool(name,args) {
+      if (window.openai?.callTool) return window.openai.callTool(name,args);
+      const id = `tekton-${++requestID}`;
+      return new Promise((resolve,reject) => {
+        pendingCalls.set(id,{resolve,reject});
+        window.parent.postMessage({jsonrpc:'2.0',id,method:'tools/call',params:{name,arguments:args}},'*');
+        setTimeout(() => {
+          if (!pendingCalls.has(id)) return;
+          pendingCalls.delete(id);
+          reject(new Error('MCP Apps tool call timed out'));
+        },30000);
+      });
+    }
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const args = {};
+      new FormData(form).forEach((value,key) => {
+        if (value === '') return;
+        const field = selected.fields.find(item => item.key === key);
+        args[key] = field?.type === 'number' ? Number(value) : value;
+      });
+      status.textContent = 'Running';
+      status.className = 'status';
+      output.textContent = 'Calling ' + selected.name + '…';
+      try {
+        const result = await callTool(selected.name,args);
+        render(result,selected.name);
+      } catch (error) {
+        render({ok:false,data:{error:String(error)}},selected.name);
+      }
+    });
+    selectTool(selected);
+    render(window.openai?.toolOutput || window.openai?.structuredContent || null, window.openai?.toolResponseMetadata?.['tekton/tool']);
+    window.addEventListener('openai:set_globals', event => {
+      const globals = event.detail?.globals || {};
+      render(globals.toolOutput || globals.structuredContent, globals.toolResponseMetadata?.['tekton/tool']);
+    });
+    window.addEventListener('message', event => {
+      if (event.source !== window.parent) return;
+      const message = event.data;
+      if (!message || message.jsonrpc !== '2.0') return;
+      if (message.id && pendingCalls.has(message.id)) {
+        const pending = pendingCalls.get(message.id);
+        pendingCalls.delete(message.id);
+        if (message.error) pending.reject(new Error(message.error.message || 'MCP tool call failed'));
+        else pending.resolve(message.result);
+        return;
+      }
+      if (message.method === 'ui/notifications/tool-result') {
+        render(message.params,message.params?._meta?.['tekton/tool']);
+      }
+    },{passive:true});
+    if (new URLSearchParams(location.search).has('gallery') && !window.openai?.toolOutput) {
+      render({ok:true,data:{context:'kind-tekton',namespace:'tekton-pipelines',bundle_state:'pinned',bundle_compatible:true,rbac_ready:true,components:{pipelines:'v1.14.0',triggers:'v0.36.0',chains:'v0.28.0',results:'v0.19.0',pipelines_as_code:'v0.49.0'},state_hash:'72b9…a14f'}},'tekton_preflight');
+      status.textContent = 'Gallery preview';
+    }
+  </script>
+</body>
+</html>

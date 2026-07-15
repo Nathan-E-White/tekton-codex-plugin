@@ -9,6 +9,10 @@ Use this as the entrypoint for the upstream-only Tekton plugin.
 
 ## Route the request
 
+- Dashboard or visual tool selection: run `tekton_preflight` with explicit
+  context and namespace; its MCP Apps output opens the shared dashboard for all
+  twelve tools.
+
 - Component install, repair, reconcile, or teardown: `$tekton-platform`
 - Tasks, Pipelines, TaskRuns, or PipelineRuns: `$tekton-pipelines`
 - EventListeners, bindings, templates, or interceptors: `$tekton-triggers`
@@ -24,6 +28,8 @@ Use this as the entrypoint for the upstream-only Tekton plugin.
 3. Use plan tools before `tekton_execute_plan`. Never construct or reuse confirmation tokens yourself.
 4. Treat a plan as single-use, cluster-bound, drift-sensitive, and valid for at most 15 minutes.
 5. Never expose kubeconfig data, tokens, Secret values, private keys, or unbounded logs.
-6. Stop on unsupported or mixed component versions. v0.1.0 does not perform cross-version upgrades.
+6. Stop on unsupported or mixed component versions. v0.2.0 does not perform cross-version upgrades.
+7. Treat dashboard actions exactly like direct MCP calls. The UI does not relax
+   profile, plan, confirmation, drift, backup, path, or redaction rules.
 
 Read `references/supported-bundle.md` at the plugin root when exact component versions or install order matter.

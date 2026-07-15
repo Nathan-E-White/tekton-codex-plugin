@@ -5,7 +5,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / ".codex-plugin" / "plugin.json").read_text())
 assert manifest["name"] == "tekton"
-assert manifest["version"] == "0.1.0"
+assert manifest["version"] == "0.2.0"
 assert manifest["mcpServers"] == "./.mcp.json"
 assert manifest["skills"] == "./skills/"
 assert len(manifest["interface"]["defaultPrompt"]) == 3
@@ -19,6 +19,33 @@ for skill_file in skill_paths:
     assert len(defaults) == 1 and defaults[0].count("\n") == 0, path
 for required in ["README.md", "UNLICENSE", "CONTEXT.md", ".mcp.json", "scripts/launch-tekton-mcp.sh"]:
     assert (root / required).is_file(), required
+
+dashboard_uri = "ui://tekton/operations-dashboard-v1"
+for required in [
+    ".agents/plugins/marketplace.json",
+    "internal/mcpapp/dashboard.html",
+    "assets/tekton-icon-color.svg",
+    "assets/tekton-horizontal-color.svg",
+    "assets/tekton-horizontal-white.svg",
+    "assets/tekton-operations-dashboard.png",
+    "assets/TEKTON-BRAND-NOTICE.txt",
+    "assets/TEKTON-UPSTREAM-LICENSE-APACHE-2.0.txt",
+    "PRIVACY.md",
+    "TERMS.md",
+    "SHARING.md",
+]:
+    assert (root / required).is_file(), required
+assert manifest["interface"]["brandColor"] == "#00109F"
+assert manifest["interface"]["screenshots"] == ["./assets/tekton-operations-dashboard.png"]
+server_source = (root / "internal" / "server" / "server.go").read_text()
+dashboard_source = (root / "internal" / "mcpapp" / "dashboard.go").read_text()
+assert dashboard_uri in dashboard_source
+assert server_source.count("mcpapp.ToolMeta(") == 12
+marketplace = json.loads((root / ".agents" / "plugins" / "marketplace.json").read_text())
+entry = marketplace["plugins"][0]
+assert marketplace["name"] == "tekton-community"
+assert entry["name"] == "tekton"
+assert entry["source"]["source"] == "url"
 
 integration_contract = {
     "scripts/kind-smoke.sh": [

@@ -21,7 +21,7 @@ validate: test vet
 	python3 scripts/validate-package.py
 
 package:
-	scripts/package-release.sh 0.1.0
+	$(GO_ENV) scripts/package-release.sh 0.2.0
 
 kind-smoke:
 	scripts/kind-smoke.sh
