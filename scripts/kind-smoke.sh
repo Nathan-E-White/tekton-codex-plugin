@@ -129,9 +129,10 @@ results_token=$(k create token tekton-results-smoke-reader --duration=10m)
 k -n tekton-pipelines port-forward service/tekton-results-api-service 18081:8080 >"$artifacts/results-port-forward.log" 2>&1 &
 results_pid=$!
 sleep 3
-curl --fail --silent --show-error --cacert "$artifacts/results.crt" \
+curl --fail --silent --show-error --noproxy '*' --cacert "$artifacts/results.crt" \
+  --resolve tekton-results-api-service.tekton-pipelines.svc.cluster.local:18081:127.0.0.1 \
   -H "Authorization: Bearer $results_token" \
-  'https://127.0.0.1:18081/v1alpha2/parents/default/results/-/records?page_size=100' \
+  'https://tekton-results-api-service.tekton-pipelines.svc.cluster.local:18081/v1alpha2/parents/default/results/-/records?page_size=100' \
   -o "$artifacts/results-records.json"
 jq -e '.records | length > 0' "$artifacts/results-records.json" >/dev/null
 kill "$results_pid" >/dev/null 2>&1 || true
