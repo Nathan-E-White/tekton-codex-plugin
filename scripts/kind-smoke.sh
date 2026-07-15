@@ -132,7 +132,7 @@ sleep 3
 curl --fail --silent --show-error --noproxy '*' --cacert "$artifacts/results.crt" \
   --resolve tekton-results-api-service.tekton-pipelines.svc.cluster.local:18081:127.0.0.1 \
   -H "Authorization: Bearer $results_token" \
-  'https://tekton-results-api-service.tekton-pipelines.svc.cluster.local:18081/v1alpha2/parents/default/results/-/records?page_size=100' \
+  'https://tekton-results-api-service.tekton-pipelines.svc.cluster.local:18081/apis/results.tekton.dev/v1alpha2/parents/default/results/-/records?page_size=100' \
   -o "$artifacts/results-records.json"
 jq -e '.records | length > 0' "$artifacts/results-records.json" >/dev/null
 kill "$results_pid" >/dev/null 2>&1 || true
