@@ -140,6 +140,17 @@ rm -f "$artifacts/results-records.json" "$artifacts/results.key" "$artifacts/pac
 k -n tekton-pipelines get configmap tekton-results-config-results-retention-policy >/dev/null
 
 # Teardown follows reverse dependency order and verifies cluster-scoped residue is gone.
+# Delete tenant resources while their reconcilers are still available so finalizers complete.
+k -n default delete eventlistener tekton-codex-smoke --ignore-not-found --timeout=120s
+k -n default delete triggertemplate tekton-codex-smoke --ignore-not-found --timeout=120s
+k -n default delete taskrun tekton-codex-trigger-smoke --ignore-not-found --timeout=120s
+k delete -f test/fixtures/trigger-smoke.yaml --ignore-not-found --timeout=120s
+k delete -f test/fixtures/cancel-smoke.yaml --ignore-not-found --timeout=120s
+k delete -f test/fixtures/full-bundle.yaml --ignore-not-found --timeout=120s
+k delete clusterrolebinding tekton-results-smoke-reader --ignore-not-found
+k -n default delete serviceaccount tekton-results-smoke-reader --ignore-not-found
+k -n default delete secret github-webhook --ignore-not-found
+
 k delete -f "$pac_manifest" --ignore-not-found
 k delete -f "$results_manifest" --ignore-not-found
 k delete -f "$chains_manifest" --ignore-not-found
