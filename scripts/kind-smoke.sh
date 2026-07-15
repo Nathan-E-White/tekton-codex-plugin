@@ -10,6 +10,7 @@ kind create cluster --name "$cluster" --wait 120s
 pipeline_manifest=https://github.com/tektoncd/pipeline/releases/download/v1.14.0/release.yaml
 kubectl --context "$context" apply -f "$pipeline_manifest"
 kubectl --context "$context" wait --namespace tekton-pipelines --for=condition=Available deployment/tekton-pipelines-controller --timeout=180s
+kubectl --context "$context" wait --namespace tekton-pipelines --for=condition=Available deployment/tekton-pipelines-webhook --timeout=180s
 kubectl --context "$context" apply -f test/fixtures/smoke.yaml
 kubectl --context "$context" wait --namespace default --for=condition=Succeeded taskrun/tekton-codex-smoke --timeout=180s
 kubectl --context "$context" delete -f test/fixtures/smoke.yaml
