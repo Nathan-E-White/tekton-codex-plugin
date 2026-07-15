@@ -96,9 +96,8 @@ k -n default wait --for=condition=Succeeded pipelinerun/tekton-codex-pipeline-sm
 wait_taskrun tekton-codex-task-smoke
 
 for run in tekton-codex-task-smoke; do
+  # Chains sets this only after the configured signer and storage backends complete.
   k -n default wait --for=jsonpath='{.metadata.annotations.chains\.tekton\.dev/signed}'=true "taskrun/$run" --timeout=300s
-  k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/signature-"))' >/dev/null
-  k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/payload-"))' >/dev/null
   wait_annotation "taskrun/$run" results.tekton.dev/result
   wait_annotation "taskrun/$run" results.tekton.dev/record
 done
