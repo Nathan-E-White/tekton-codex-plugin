@@ -35,14 +35,16 @@ func (p Profile) Valid() bool {
 }
 
 type PlanInput struct {
-	Action          string
-	Context         string
-	Namespace       string
-	Profile         Profile
-	ClusterIdentity string
-	StateHash       string
-	Destructive     bool
-	BackupReference string
+	Action            string
+	Context           string
+	Namespace         string
+	Profile           Profile
+	ClusterIdentity   string
+	StateHash         string
+	Destructive       bool
+	BackupReference   string
+	EvidenceLocation  string
+	DataLossInventory map[string]int64
 }
 
 type Operation struct {
@@ -58,19 +60,21 @@ type OperationSummary struct {
 }
 
 type Plan struct {
-	ID              string             `json:"id"`
-	Action          string             `json:"action"`
-	Context         string             `json:"context"`
-	Namespace       string             `json:"namespace,omitempty"`
-	Profile         Profile            `json:"profile"`
-	ClusterIdentity string             `json:"cluster_identity"`
-	StateHash       string             `json:"state_hash"`
-	Destructive     bool               `json:"destructive"`
-	BackupReference string             `json:"backup_reference,omitempty"`
-	CreatedAt       time.Time          `json:"created_at"`
-	ExpiresAt       time.Time          `json:"expires_at"`
-	ConsumedAt      *time.Time         `json:"consumed_at,omitempty"`
-	Operations      []OperationSummary `json:"operations"`
+	ID                string             `json:"id"`
+	Action            string             `json:"action"`
+	Context           string             `json:"context"`
+	Namespace         string             `json:"namespace,omitempty"`
+	Profile           Profile            `json:"profile"`
+	ClusterIdentity   string             `json:"cluster_identity"`
+	StateHash         string             `json:"state_hash"`
+	Destructive       bool               `json:"destructive"`
+	BackupReference   string             `json:"backup_reference,omitempty"`
+	EvidenceLocation  string             `json:"evidence_location"`
+	DataLossInventory map[string]int64   `json:"data_loss_inventory,omitempty"`
+	CreatedAt         time.Time          `json:"created_at"`
+	ExpiresAt         time.Time          `json:"expires_at"`
+	ConsumedAt        *time.Time         `json:"consumed_at,omitempty"`
+	Operations        []OperationSummary `json:"operations"`
 }
 
 func (p Plan) ConfirmationToken() string {
@@ -118,6 +122,7 @@ func (s *Store) Create(input PlanInput, operations []Operation) (Plan, error) {
 		Action: input.Action, Context: input.Context, Namespace: input.Namespace, Profile: input.Profile,
 		ClusterIdentity: input.ClusterIdentity, StateHash: input.StateHash, Destructive: input.Destructive,
 		BackupReference: input.BackupReference, CreatedAt: created, ExpiresAt: created.Add(s.ttl), Operations: summaries,
+		EvidenceLocation: input.EvidenceLocation, DataLossInventory: input.DataLossInventory,
 	}
 	plan.ID = planDigest(plan)
 	s.mu.Lock()
@@ -130,6 +135,17 @@ func (s *Store) Create(input PlanInput, operations []Operation) (Plan, error) {
 		return Plan{}, err
 	}
 	_ = s.appendEvidence(map[string]any{"event": "plan_created", "plan_id": plan.ID, "action": plan.Action, "context": plan.Context, "profile": plan.Profile, "created_at": created})
+	return plan, nil
+}
+
+// Lookup returns immutable plan metadata without exposing the executable payload.
+func (s *Store) Lookup(id string) (Plan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	plan, ok := s.plans[id]
+	if !ok {
+		return Plan{}, ErrUnavailable
+	}
 	return plan, nil
 }
 

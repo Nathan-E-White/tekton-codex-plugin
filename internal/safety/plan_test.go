@@ -89,3 +89,21 @@ func TestPlanEvidenceNeverPersistsOperationStdin(t *testing.T) {
 		t.Fatalf("plan evidence persisted operation stdin: %s", b)
 	}
 }
+
+func TestPlanBindsEvidenceAndDataLossInventory(t *testing.T) {
+	store, err := safety.NewStore(t.TempDir(), 15*time.Minute, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := store.Create(safety.PlanInput{
+		Action: "teardown", Context: "kind-tekton", Namespace: "ci", Profile: safety.ProfileDev,
+		ClusterIdentity: "cluster-a", StateHash: "state-a", Destructive: true,
+		EvidenceLocation: "/tmp/evidence.jsonl", DataLossInventory: map[string]int64{"tekton.dev/pipelineruns": 7},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.EvidenceLocation != "/tmp/evidence.jsonl" || plan.DataLossInventory["tekton.dev/pipelineruns"] != 7 {
+		t.Fatalf("plan did not bind safety evidence: %#v", plan)
+	}
+}

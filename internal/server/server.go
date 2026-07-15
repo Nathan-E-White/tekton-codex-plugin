@@ -80,13 +80,13 @@ type VerifyInput struct {
 
 type BackupInput struct {
 	Context                   string `json:"context"`
-	Namespace                 string `json:"namespace,omitempty"`
+	Namespace                 string `json:"namespace"`
 	ExternalDatabaseReference string `json:"external_database_reference"`
 }
 
 type PlatformPlanInput struct {
 	Context         string         `json:"context"`
-	Namespace       string         `json:"namespace,omitempty"`
+	Namespace       string         `json:"namespace"`
 	Profile         safety.Profile `json:"profile"`
 	Action          string         `json:"action"`
 	BackupReference string         `json:"backup_reference,omitempty"`
@@ -171,24 +171,32 @@ func (s *Service) preflight(ctx context.Context, _ *mcp.CallToolRequest, in Scop
 	if err != nil {
 		return nil, Output{}, err
 	}
-	components := map[string]any{}
-	for _, item := range bundle.Components {
-		deployments, err := c.Deployments(ctx, item.Namespace)
-		if err != nil {
-			components[item.Name] = map[string]any{"expected": item.Version, "status": "unavailable"}
-			continue
-		}
-		images := []string{}
-		for _, deployment := range deployments {
-			images = append(images, deployment.Images...)
-		}
-		components[item.Name] = map[string]any{"expected": item.Version, "deployments": len(deployments), "images": images}
+	components, supported, err := inspectBundle(ctx, c)
+	if err != nil {
+		return nil, Output{}, err
 	}
 	roots := []string{}
 	if s.paths != nil {
 		roots = s.paths.Roots()
 	}
-	return nil, Output{OK: true, Data: map[string]any{"context": c.Context, "namespace": c.Namespace, "cluster_identity": identity, "state_hash": state, "components": components, "manifest_roots": roots, "tkn": bundle.TKNVersion}}, nil
+	tknReport, tknSupported := s.inspectTKN(ctx)
+	rbac := map[string]any{}
+	rbacReady := true
+	for name, check := range map[string][3]string{
+		"inspect_runs": {"list", "tekton.dev", "pipelineruns"},
+		"create_runs":  {"create", "tekton.dev", "pipelineruns"},
+		"read_logs":    {"get", "", "pods/log"},
+	} {
+		allowed, reason, reviewErr := c.AccessReview(ctx, check[0], check[1], check[2], in.Namespace)
+		if reviewErr != nil {
+			rbac[name] = map[string]any{"allowed": false, "error": safety.Redact(reviewErr.Error())}
+			rbacReady = false
+			continue
+		}
+		rbac[name] = map[string]any{"allowed": allowed, "reason": reason}
+		rbacReady = rbacReady && allowed
+	}
+	return nil, Output{OK: supported && rbacReady && tknSupported, Data: map[string]any{"context": c.Context, "namespace": c.Namespace, "cluster_identity": identity, "state_hash": state, "bundle_supported": supported, "rbac_ready": rbacReady, "rbac": rbac, "components": components, "manifest_roots": roots, "tkn": tknReport}}, nil
 }
 
 func (s *Service) validate(ctx context.Context, _ *mcp.CallToolRequest, in ValidateInput) (*mcp.CallToolResult, Output, error) {
@@ -292,31 +300,52 @@ func (s *Service) exportBackup(ctx context.Context, _ *mcp.CallToolRequest, in B
 	if err := os.WriteFile(path, []byte(result.Output), 0o600); err != nil {
 		return nil, Output{}, err
 	}
-	proof := map[string]any{"context": in.Context, "resource_export": path, "sha256": hash, "external_database_reference": in.ExternalDatabaseReference, "created_at": time.Now().UTC()}
+	proof := map[string]any{"context": in.Context, "namespace": in.Namespace, "resource_export": path, "sha256": hash, "external_database_reference": in.ExternalDatabaseReference, "created_at": time.Now().UTC()}
 	b, _ := json.Marshal(proof)
 	proofHash := sha256.Sum256(b)
-	return nil, Output{OK: true, Data: map[string]any{"proof": proof, "proof_sha256": hex.EncodeToString(proofHash[:])}}, nil
+	proofID := hex.EncodeToString(proofHash[:])
+	if err := os.WriteFile(filepath.Join(s.artifacts, "backup-proof-"+proofID+".json"), append(b, '\n'), 0o600); err != nil {
+		return nil, Output{}, err
+	}
+	return nil, Output{OK: true, Data: map[string]any{"proof": proof, "proof_sha256": proofID}}, nil
 }
 
 func (s *Service) planPlatform(ctx context.Context, _ *mcp.CallToolRequest, in PlatformPlanInput) (*mcp.CallToolResult, Output, error) {
-	_, identity, state, err := scoped(ctx, in.Context, in.Namespace)
+	c, identity, state, err := scoped(ctx, in.Context, in.Namespace)
 	if err != nil {
 		return nil, Output{}, err
 	}
+	components, supported, err := inspectBundle(ctx, c)
+	if err != nil {
+		return nil, Output{}, err
+	}
+	if !supported {
+		return nil, Output{}, fmt.Errorf("unsupported or mixed Tekton component bundle: %v", components)
+	}
 	operations := []safety.Operation{}
+	var inventory map[string]int64
 	switch in.Action {
 	case "install", "reconcile", "repair":
 		for _, item := range bundle.Components {
 			operations = append(operations, safety.Operation{Command: "kubectl", Args: []string{"--context", in.Context, "apply", "--server-side", "-f", item.Manifest}})
 		}
 	case "teardown":
+		inventory, err = c.DataLossInventory(ctx)
+		if err != nil {
+			return nil, Output{}, fmt.Errorf("teardown requires data-loss enumeration: %w", err)
+		}
+		if in.Profile == safety.ProfileStg || in.Profile == safety.ProfileProd {
+			if err := s.verifyBackupProof(in.BackupReference, in.Context, in.Namespace); err != nil {
+				return nil, Output{}, err
+			}
+		}
 		for _, item := range bundle.Reverse() {
 			operations = append(operations, safety.Operation{Command: "kubectl", Args: []string{"--context", in.Context, "delete", "--ignore-not-found", "-f", item.Manifest}})
 		}
 	default:
 		return nil, Output{}, fmt.Errorf("unsupported platform action %q", in.Action)
 	}
-	plan, err := s.plans.Create(safety.PlanInput{Action: in.Action, Context: in.Context, Namespace: in.Namespace, Profile: in.Profile, ClusterIdentity: identity, StateHash: state, Destructive: in.Action == "teardown", BackupReference: in.BackupReference}, operations)
+	plan, err := s.plans.Create(safety.PlanInput{Action: in.Action, Context: in.Context, Namespace: in.Namespace, Profile: in.Profile, ClusterIdentity: identity, StateHash: state, Destructive: in.Action == "teardown", BackupReference: in.BackupReference, EvidenceLocation: filepath.Join(s.artifacts, "evidence.jsonl"), DataLossInventory: inventory}, operations)
 	if err != nil {
 		return nil, Output{}, err
 	}
@@ -335,11 +364,18 @@ func (s *Service) planResources(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, Output{}, err
 	}
+	dryRunArgs := []string{"--context", in.Context, "--namespace", in.Namespace, in.Action, "--dry-run=server", "-f", "-"}
+	if in.Action == "apply" {
+		dryRunArgs = []string{"--context", in.Context, "--namespace", in.Namespace, "apply", "--server-side", "--dry-run=server", "-f", "-"}
+	}
+	if result, runErr := s.runner.Run(ctx, "kubectl", dryRunArgs, doc.Bytes); runErr != nil {
+		return nil, Output{}, fmt.Errorf("resource plan server-side validation failed: %w: %s", runErr, result.Output)
+	}
 	args := []string{"--context", in.Context, "--namespace", in.Namespace, in.Action, "-f", "-"}
 	if in.Action == "apply" {
 		args = []string{"--context", in.Context, "--namespace", in.Namespace, "apply", "--server-side", "-f", "-"}
 	}
-	plan, err := s.plans.Create(safety.PlanInput{Action: in.Action, Context: in.Context, Namespace: in.Namespace, Profile: in.Profile, ClusterIdentity: identity, StateHash: state, Destructive: in.Action == "delete"}, []safety.Operation{{Command: "kubectl", Args: args, Stdin: doc.Bytes}})
+	plan, err := s.plans.Create(safety.PlanInput{Action: in.Action, Context: in.Context, Namespace: in.Namespace, Profile: in.Profile, ClusterIdentity: identity, StateHash: state, Destructive: in.Action == "delete", EvidenceLocation: filepath.Join(s.artifacts, "evidence.jsonl")}, []safety.Operation{{Command: "kubectl", Args: args, Stdin: doc.Bytes}})
 	if err != nil {
 		return nil, Output{}, err
 	}
@@ -350,6 +386,9 @@ func (s *Service) planRun(ctx context.Context, _ *mcp.CallToolRequest, in RunPla
 	_, identity, state, err := scoped(ctx, in.Context, in.Namespace)
 	if err != nil {
 		return nil, Output{}, err
+	}
+	if report, supported := s.inspectTKN(ctx); !supported {
+		return nil, Output{}, fmt.Errorf("unsupported tkn client: %v", report)
 	}
 	resource := "pipeline"
 	runResource := "pipelinerun"
@@ -369,7 +408,7 @@ func (s *Service) planRun(ctx context.Context, _ *mcp.CallToolRequest, in RunPla
 	default:
 		return nil, Output{}, fmt.Errorf("unsupported run action %q", in.Action)
 	}
-	plan, err := s.plans.Create(safety.PlanInput{Action: in.Action, Context: in.Context, Namespace: in.Namespace, Profile: in.Profile, ClusterIdentity: identity, StateHash: state, Destructive: in.Action == "cancel" || in.Action == "run-cleanup"}, []safety.Operation{{Command: "tkn", Args: args}})
+	plan, err := s.plans.Create(safety.PlanInput{Action: in.Action, Context: in.Context, Namespace: in.Namespace, Profile: in.Profile, ClusterIdentity: identity, StateHash: state, Destructive: in.Action == "cancel" || in.Action == "run-cleanup", EvidenceLocation: filepath.Join(s.artifacts, "evidence.jsonl")}, []safety.Operation{{Command: "tkn", Args: args}})
 	if err != nil {
 		return nil, Output{}, err
 	}
@@ -377,11 +416,11 @@ func (s *Service) planRun(ctx context.Context, _ *mcp.CallToolRequest, in RunPla
 }
 
 func (s *Service) executePlan(ctx context.Context, _ *mcp.CallToolRequest, in ExecuteInput) (*mcp.CallToolResult, Output, error) {
-	planContext := planContextFromConfirmation(in.Confirmation)
-	if planContext == "" {
-		return nil, Output{}, safety.ErrConfirmation
+	metadata, err := s.plans.Lookup(in.PlanID)
+	if err != nil {
+		return nil, Output{}, err
 	}
-	_, identity, state, err := scoped(ctx, planContext, "")
+	_, identity, state, err := scoped(ctx, metadata.Context, metadata.Namespace)
 	if err != nil {
 		return nil, Output{}, err
 	}
@@ -422,6 +461,132 @@ func planResponse(plan safety.Plan) map[string]any {
 	return map[string]any{"plan": plan, "confirmation": plan.ConfirmationToken()}
 }
 
+func inspectBundle(ctx context.Context, c *cluster.Client) (map[string]any, bool, error) {
+	reports := map[string]any{}
+	supported := true
+	for _, component := range bundle.Components {
+		deployments, err := c.Deployments(ctx, component.Namespace)
+		if err != nil {
+			reports[component.Name] = map[string]any{"expected": component.Version, "status": "unavailable", "error": safety.Redact(err.Error())}
+			supported = false
+			continue
+		}
+		matched := make([]cluster.DeploymentInfo, 0)
+		versions := map[string]bool{}
+		unknown := false
+		for _, deployment := range deployments {
+			if !deploymentBelongsTo(component.Name, component.Namespace, deployment.Name) {
+				continue
+			}
+			matched = append(matched, deployment)
+			version := deployment.Labels["app.kubernetes.io/version"]
+			if version == "" {
+				for _, image := range deployment.Images {
+					if strings.Contains(image, component.Version) {
+						version = component.Version
+						break
+					}
+				}
+			}
+			if version == "" {
+				unknown = true
+			} else {
+				versions[version] = true
+			}
+		}
+		status := "supported"
+		if len(matched) == 0 {
+			status = "absent"
+		} else if unknown {
+			status = "unknown"
+			supported = false
+		} else if len(versions) != 1 || !versionSetContains(versions, component.Version) {
+			status = "unsupported"
+			if len(versions) > 1 {
+				status = "mixed"
+			}
+			supported = false
+		}
+		observed := make([]string, 0, len(versions))
+		for version := range versions {
+			observed = append(observed, version)
+		}
+		reports[component.Name] = map[string]any{"expected": component.Version, "status": status, "observed_versions": observed, "deployments": matched}
+	}
+	return reports, supported, nil
+}
+
+func versionSetContains(versions map[string]bool, expected string) bool {
+	for version := range versions {
+		if strings.TrimPrefix(version, "v") == strings.TrimPrefix(expected, "v") {
+			return true
+		}
+	}
+	return false
+}
+
+func deploymentBelongsTo(component, namespace, name string) bool {
+	switch component {
+	case "pipelines":
+		return strings.HasPrefix(name, "tekton-pipelines-")
+	case "triggers":
+		return strings.HasPrefix(name, "tekton-triggers-")
+	case "results":
+		return strings.HasPrefix(name, "tekton-results-")
+	case "chains":
+		return namespace == "tekton-chains"
+	case "pipelines-as-code":
+		return namespace == "pipelines-as-code"
+	default:
+		return false
+	}
+}
+
+func (s *Service) verifyBackupProof(id, contextName, namespace string) error {
+	if len(id) != 64 || strings.Trim(id, "0123456789abcdef") != "" {
+		return safety.ErrBackupRequired
+	}
+	b, err := os.ReadFile(filepath.Join(s.artifacts, "backup-proof-"+id+".json"))
+	if err != nil {
+		return fmt.Errorf("%w: proof %q is unavailable", safety.ErrBackupRequired, id)
+	}
+	var proof struct {
+		Context                   string `json:"context"`
+		Namespace                 string `json:"namespace"`
+		ResourceExport            string `json:"resource_export"`
+		SHA256                    string `json:"sha256"`
+		ExternalDatabaseReference string `json:"external_database_reference"`
+	}
+	if err := json.Unmarshal(b, &proof); err != nil {
+		return fmt.Errorf("%w: malformed proof", safety.ErrBackupRequired)
+	}
+	if proof.Context != contextName || proof.Namespace != namespace || proof.ResourceExport == "" || proof.SHA256 == "" || strings.TrimSpace(proof.ExternalDatabaseReference) == "" {
+		return fmt.Errorf("%w: proof scope or fields do not match", safety.ErrBackupRequired)
+	}
+	exportBytes, err := os.ReadFile(proof.ResourceExport)
+	if err != nil {
+		return fmt.Errorf("%w: resource export is unavailable", safety.ErrBackupRequired)
+	}
+	digest := sha256.Sum256(exportBytes)
+	if hex.EncodeToString(digest[:]) != proof.SHA256 {
+		return fmt.Errorf("%w: resource export hash mismatch", safety.ErrBackupRequired)
+	}
+	return nil
+}
+
+func (s *Service) inspectTKN(ctx context.Context) (map[string]any, bool) {
+	result, err := s.runner.Run(ctx, "tkn", []string{"version"}, nil)
+	if err != nil {
+		return map[string]any{"expected": bundle.TKNVersion, "status": "unavailable", "error": safety.Redact(err.Error())}, false
+	}
+	supported := strings.Contains(result.Output, bundle.TKNVersion) || strings.Contains(result.Output, strings.TrimPrefix(bundle.TKNVersion, "v"))
+	status := "supported"
+	if !supported {
+		status = "unsupported"
+	}
+	return map[string]any{"expected": bundle.TKNVersion, "status": status, "version_output": result.Output}, supported
+}
+
 func splitRoots(value string) []string {
 	parts := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == os.PathListSeparator })
 	result := []string{}
@@ -431,12 +596,4 @@ func splitRoots(value string) []string {
 		}
 	}
 	return result
-}
-
-func planContextFromConfirmation(value string) string {
-	parts := strings.Fields(value)
-	if len(parts) != 4 || parts[0] != "CONFIRM" {
-		return ""
-	}
-	return parts[2]
 }
