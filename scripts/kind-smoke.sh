@@ -147,10 +147,17 @@ k get taskruns.tekton.dev,pipelineruns.tekton.dev,eventlisteners.triggers.tekton
 shasum -a 256 "$artifacts/teardown-inventory.json" >"$artifacts/teardown-inventory.sha256"
 
 # The disposable dev profile has no external consumers after inventory capture.
+# Set deletion timestamps first so reconcilers cannot race by re-adding finalizers.
 for resource in taskruns.tekton.dev pipelineruns.tekton.dev; do
+  k delete "$resource" --all -A --wait=false >/dev/null
   k get "$resource" -A -o json | jq -r '.items[] | [.metadata.namespace,.metadata.name] | @tsv' | while IFS=$'\t' read -r resource_namespace resource_name; do
     k -n "$resource_namespace" patch "$resource" "$resource_name" --type merge -p '{"metadata":{"finalizers":[]}}' >/dev/null
   done
+  for _ in {1..30}; do
+    [[ $(k get "$resource" -A -o json | jq '.items | length') -eq 0 ]] && break
+    sleep 2
+  done
+  [[ $(k get "$resource" -A -o json | jq '.items | length') -eq 0 ]] || { echo "teardown left $resource" >&2; exit 1; }
 done
 
 k -n default delete eventlistener tekton-codex-smoke --ignore-not-found --timeout=120s
