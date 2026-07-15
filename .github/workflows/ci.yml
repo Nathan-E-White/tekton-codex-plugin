@@ -32,7 +32,7 @@ jobs:
         with:
           go-version-file: go.mod
       - run: scripts/package-release.sh 0.1.0
-      - run: shasum -a 256 -c dist/SHA256SUMS
+      - run: cd dist && shasum -a 256 -c SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: release-archives

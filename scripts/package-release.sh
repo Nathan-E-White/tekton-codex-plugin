@@ -19,4 +19,4 @@ for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
 done
 
 cd "$dist"
-shasum -a 256 ./*.tar.gz > SHA256SUMS
+shasum -a 256 *.tar.gz > SHA256SUMS
