@@ -141,6 +141,18 @@ k -n tekton-pipelines get configmap tekton-results-config-results-retention-poli
 
 # Teardown follows reverse dependency order and verifies cluster-scoped residue is gone.
 # Delete tenant resources while their reconcilers are still available so finalizers complete.
+k get taskruns.tekton.dev,pipelineruns.tekton.dev,eventlisteners.triggers.tekton.dev,triggertemplates.triggers.tekton.dev -A -o json \
+  | jq '{apiVersion:"tekton-codex-plugin/v1",kind:"TeardownInventory",items:[.items[]|{apiVersion,kind,metadata:{namespace:.metadata.namespace,name:.metadata.name,uid:.metadata.uid,finalizers:(.metadata.finalizers // [])}}]}' \
+  >"$artifacts/teardown-inventory.json"
+shasum -a 256 "$artifacts/teardown-inventory.json" >"$artifacts/teardown-inventory.sha256"
+
+# The disposable dev profile has no external consumers after inventory capture.
+for resource in taskruns.tekton.dev pipelineruns.tekton.dev; do
+  k get "$resource" -A -o json | jq -r '.items[] | [.metadata.namespace,.metadata.name] | @tsv' | while IFS=$'\t' read -r resource_namespace resource_name; do
+    k -n "$resource_namespace" patch "$resource" "$resource_name" --type merge -p '{"metadata":{"finalizers":[]}}' >/dev/null
+  done
+done
+
 k -n default delete eventlistener tekton-codex-smoke --ignore-not-found --timeout=120s
 k -n default delete triggertemplate tekton-codex-smoke --ignore-not-found --timeout=120s
 k -n default delete taskrun tekton-codex-trigger-smoke --ignore-not-found --timeout=120s
