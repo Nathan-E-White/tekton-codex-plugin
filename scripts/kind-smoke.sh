@@ -20,6 +20,15 @@ trap cleanup EXIT INT TERM
 k() { kubectl --context "$context" "$@"; }
 wait_deployment() { k -n "$1" wait --for=condition=Available "deployment/$2" --timeout=300s; }
 wait_taskrun() { k -n default wait --for=condition=Succeeded "taskrun/$1" --timeout=300s; }
+wait_annotation() {
+  local resource=$1 key=$2
+  for _ in {1..60}; do
+    if k -n default get "$resource" -o json | jq -e --arg key "$key" '.metadata.annotations | has($key)' >/dev/null; then return 0; fi
+    sleep 5
+  done
+  echo "timed out waiting for annotation $key on $resource" >&2
+  return 1
+}
 
 mkdir -p "$artifacts"
 kind create cluster --name "$cluster" --wait 120s
@@ -80,7 +89,7 @@ wait_deployment tekton-pipelines tekton-triggers-controller
 k -n tekton-chains patch configmap chains-config --type merge -p \
   '{"data":{"artifacts.taskrun.format":"in-toto","artifacts.taskrun.signer":"x509","artifacts.taskrun.storage":"tekton","artifacts.pipelinerun.format":"in-toto","artifacts.pipelinerun.signer":"x509","artifacts.pipelinerun.storage":"tekton"}}'
 k -n tekton-chains rollout restart deployment/tekton-chains-controller
-wait_deployment tekton-chains tekton-chains-controller
+k -n tekton-chains rollout status deployment/tekton-chains-controller --timeout=300s
 
 k apply -f test/fixtures/full-bundle.yaml
 k -n default wait --for=condition=Succeeded pipelinerun/tekton-codex-pipeline-smoke --timeout=300s
@@ -90,8 +99,8 @@ for run in tekton-codex-task-smoke; do
   k -n default wait --for=jsonpath='{.metadata.annotations.chains\.tekton\.dev/signed}'=true "taskrun/$run" --timeout=300s
   k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/signature-"))' >/dev/null
   k -n default get "taskrun/$run" -o json | jq -e '.metadata.annotations | keys | any(startswith("chains.tekton.dev/payload-"))' >/dev/null
-  k -n default wait --for=jsonpath='{.metadata.annotations.results\.tekton\.dev/result}' "taskrun/$run" --timeout=300s
-  k -n default wait --for=jsonpath='{.metadata.annotations.results\.tekton\.dev/record}' "taskrun/$run" --timeout=300s
+  wait_annotation "taskrun/$run" results.tekton.dev/result
+  wait_annotation "taskrun/$run" results.tekton.dev/record
 done
 
 # A signed GitHub-shaped event must cross the live EventListener seam.
