@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton Chains"
+  short_description: "Configure and verify Tekton provenance"
+  default_prompt: "Use $tekton-chains to configure or verify this Tekton signing workflow."

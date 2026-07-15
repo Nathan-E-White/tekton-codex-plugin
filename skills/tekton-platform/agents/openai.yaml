@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton Platform"
+  short_description: "Manage the pinned Tekton component bundle"
+  default_prompt: "Use $tekton-platform to inspect or plan this Tekton platform lifecycle change."

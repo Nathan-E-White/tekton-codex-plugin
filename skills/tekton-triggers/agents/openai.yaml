@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton Triggers"
+  short_description: "Manage Tekton event-driven triggers"
+  default_prompt: "Use $tekton-triggers to configure or diagnose this Tekton event flow."

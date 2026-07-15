@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tekton Results"
+  short_description: "Query and manage Tekton run history"
+  default_prompt: "Use $tekton-results to inspect or configure this Tekton Results workflow."
