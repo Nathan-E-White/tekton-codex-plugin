@@ -1,0 +1,13 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: tekton-codex-cancel-smoke
+spec:
+  pipelineSpec:
+    tasks:
+      - name: wait
+        taskSpec:
+          steps:
+            - name: wait
+              image: cgr.dev/chainguard/busybox:latest
+              script: sleep 300

@@ -1,7 +1,7 @@
 {
   "name": "tekton",
-  "version": "0.1.0",
-  "description": "Guarded upstream Tekton lifecycle, pipeline, trigger, provenance, results, and GitHub Pipelines-as-Code workflows for Codex.",
+  "version": "0.2.0",
+  "description": "Guarded upstream Tekton workflows and an interactive dashboard for all twelve local MCP tools.",
   "author": {
     "name": "Nathan E White",
     "url": "https://github.com/Nathan-E-White"
@@ -19,10 +19,19 @@
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
     "defaultPrompt": [
-      "Inspect this cluster and report Tekton component health.",
+      "Inspect this cluster and show the Tekton operations dashboard.",
       "Validate this Tekton Pipeline before applying it.",
       "Plan a guarded Tekton workload or platform change."
-    ]
+    ],
+    "brandColor": "#00109F",
+    "composerIcon": "./assets/tekton-icon-color.svg",
+    "logo": "./assets/tekton-horizontal-color.svg",
+    "logoDark": "./assets/tekton-horizontal-white.svg",
+    "screenshots": [
+      "./assets/tekton-operations-dashboard.png"
+    ],
+    "privacyPolicyURL": "https://github.com/Nathan-E-White/tekton-codex-plugin/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/Nathan-E-White/tekton-codex-plugin/blob/main/TERMS.md"
   },
   "mcpServers": "./.mcp.json"
 }

@@ -1,0 +1,16 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: tekton-codex-pac-smoke-
+  annotations:
+    pipelinesascode.tekton.dev/on-event: "[pull_request, incoming]"
+    pipelinesascode.tekton.dev/on-target-branch: "[main]"
+spec:
+  pipelineSpec:
+    tasks:
+      - name: app-delivery
+        taskSpec:
+          steps:
+            - name: pass
+              image: cgr.dev/chainguard/busybox:latest
+              script: echo github-app-smoke

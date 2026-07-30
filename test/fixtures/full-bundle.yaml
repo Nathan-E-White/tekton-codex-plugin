@@ -1,0 +1,36 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: tekton-codex-smoke
+spec:
+  steps:
+    - name: pass
+      image: cgr.dev/chainguard/busybox:latest
+      script: |
+        echo smoke
+---
+apiVersion: tekton.dev/v1
+kind: TaskRun
+metadata:
+  name: tekton-codex-task-smoke
+spec:
+  taskRef:
+    name: tekton-codex-smoke
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: tekton-codex-smoke
+spec:
+  tasks:
+    - name: pass
+      taskRef:
+        name: tekton-codex-smoke
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: tekton-codex-pipeline-smoke
+spec:
+  pipelineRef:
+    name: tekton-codex-smoke

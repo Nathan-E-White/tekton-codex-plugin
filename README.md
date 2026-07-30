@@ -2,9 +2,18 @@
 
 `tekton` is a Codex plugin for upstream Tekton Pipelines, Triggers, Chains, Results, Pipelines-as-Code, and `tkn`. It combines eight focused skills with a local Go STDIO MCP server that reads the user's kubeconfig without changing the global context.
 
-Version 0.1.0 supports one tested bundle only: Pipelines v1.14.0, Triggers v0.36.0, Chains v0.28.0, Results v0.19.0, Pipelines-as-Code v0.49.0, and `tkn` v0.45.0. It does not perform cross-version upgrades and does not support OpenShift.
+Version 0.2.0 supports one tested bundle only: Pipelines v1.14.0, Triggers v0.36.0, Chains v0.28.0, Results v0.19.0, Pipelines-as-Code v0.49.0, and `tkn` v0.45.0. It does not perform cross-version upgrades and does not support OpenShift.
 
 Platform actions are state-specific: `install` requires a clean cluster, `reconcile` requires the complete pinned bundle, and `repair` accepts a partial installation only when every observed component is pinned. Workload mutations require the complete pinned bundle.
+
+## Interactive MCP dashboard
+
+All twelve MCP tools advertise `ui://tekton/operations-dashboard-v1` as their
+output template. The self-contained dashboard can inspect cluster state,
+validate resources, browse runs, read bounded logs, query Results, verify Chains
+attestations, export teardown proof, create immutable plans, and execute an
+exact-confirmed plan. It calls the same typed MCP tools; it does not bypass the
+server's profile, expiry, drift, backup, or confirmation gates.
 
 ## Safety model
 
@@ -31,6 +40,9 @@ The launcher selects a packaged binary for `darwin` or `linux` on `amd64` or `ar
 
 ## Release
 
-`scripts/package-release.sh 0.1.0` builds four complete plugin archives plus SHA-256 checksums. CI adds SBOMs and provenance attestations to GitHub Releases. See [the pinned bundle](references/supported-bundle.md), [the glossary](CONTEXT.md), and [the ADRs](docs/adr/).
+`scripts/package-release.sh 0.2.0` builds four complete plugin archives plus SHA-256 checksums. CI adds SBOMs and provenance attestations to GitHub Releases. See [the pinned bundle](references/supported-bundle.md), [the glossary](CONTEXT.md), and [the ADRs](docs/adr/).
 
-Released under the Unlicense.
+The plugin is released under the Unlicense. Tekton upstream software is
+Apache-2.0, and the official marks remain subject to the Linux Foundation
+trademark policy. See [the upstream brand notice](assets/TEKTON-BRAND-NOTICE.txt),
+[privacy](PRIVACY.md), [terms](TERMS.md), and [the public sharing guide](SHARING.md).
